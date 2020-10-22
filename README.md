@@ -23,7 +23,7 @@ or by [opening an issue](https://github.com/SLACKHA/pyJac/issues) on our github 
 ```
 > pip install --upgrade --user -r requirements.txt
 > python ./setup.py build
-> python ./setup.py install -—user
+> python ./setup.py install --user
 ```
 
 ## Example
