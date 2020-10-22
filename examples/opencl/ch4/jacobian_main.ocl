@@ -546,12 +546,13 @@ int main(int argc, char* argv[])
     StartTimer();
     kernel.resize(problem_size, work_size, !compile);
     double setup_time = GetTimer();
+    kernel(h_P_arr_local, h_phi_local, h_jac_local);
     StartTimer();
     kernel(h_P_arr_local, h_phi_local, h_jac_local);
     double runtime = GetTimer();
 
-    printf("%zu,%.15le,%.15le,%.15le\n", problem_size, compilation_time,
-                setup_time, runtime);
+    printf("%zu,%.15le,%.15le,%.15le,%.15le\n", problem_size, compilation_time,
+                setup_time, runtime, (double) problem_size/(runtime/1e3));
 
     // write output to file if supplied
 
