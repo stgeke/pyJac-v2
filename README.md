@@ -20,25 +20,6 @@ or by [opening an issue](https://github.com/SLACKHA/pyJac/issues) on our github 
 
 ## Installation
 
-Detailed installation instructions can be found in the
-[full documentation](http://slackha.github.io/pyJac/).
-The easiest way to install pyJac is via `conda`. You can install to your
-environment with
-```
-> conda install -c slackha pyjac
-```
-
-pyJac can also be installed from PyPI using pip:
-```
-pip install pyjac
-```
-or, using the downloaded source code, installed as a Python module:
-```
-> python setup.py install
-```
-
-## Installation
-
 ```
 > pip install --upgrade --user -r requirements.txt
 > python ./setup.py build
