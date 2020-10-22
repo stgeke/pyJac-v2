@@ -32,7 +32,7 @@ or by [opening an issue](https://github.com/SLACKHA/pyJac/issues) on our github 
 > ~/.local/bin/pyjac --lang opencl --width 128 --data_order F --platform NVIDIA --input data/h2o2.inp --jac_format full
 > cd out
 > g++ -x c++ jacobian_main.ocl read_initial_conditions.ocl error_check.ocl timer.ocl jacobian_compiler.ocl -L/soft/compilers/cuda/cuda-10.0.130/lib64 -lOpenCL -o jac
-> ./jac 1000000 256 1 # requires a file data.bin with IVPs (T, pr, Yi, ...)
+> ./jac 1000000 128 1 # requires a file data.bin with IVPs (T, pr, Yi, ...)
 ```
 
 The generated source code is placed within the `out` (by default) directory,
