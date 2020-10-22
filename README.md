@@ -49,7 +49,7 @@ or, using the downloaded source code, installed as a Python module:
 
 ```
 > cd build/lib/pyjac/tests
-> ~/.local/bin/pyjac --lang opencl --width 256 --data_order F --platform NVIDIA --input test.inp
+> ~/.local/bin/pyjac --lang opencl --width 128 --data_order F --platform NVIDIA --input test.inp --jac_format full
 > cd out
 > g++ -x c++ jacobian_main.ocl read_initial_conditions.ocl error_check.ocl timer.ocl jacobian_compiler.ocl -L/soft/compilers/cuda/cuda-10.0.130/lib64 -lOpenCL -o jac
 > ./jac 1000000 256 1 # requires a file data.bin with IVPs (T, pr, Yi, ...)
