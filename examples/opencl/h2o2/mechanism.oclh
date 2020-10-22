@@ -1,0 +1,6 @@
+#ifndef MECHANISM_OCLH
+#define MECHANISM_OCLH
+#define NS (9)
+#define NR (28)
+#define NN (10)
+#endif

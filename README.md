@@ -29,16 +29,16 @@ or by [opening an issue](https://github.com/SLACKHA/pyJac/issues) on our github 
 ## Example
 
 ```
-> ~/.local/bin/pyjac --lang opencl --width 128 --data_order F --platform NVIDIA --input data/h2o2.inp --jac_format full
-> cd out
-> g++ -x c++ jacobian_main.ocl read_initial_conditions.ocl error_check.ocl timer.ocl jacobian_compiler.ocl -L/soft/compilers/cuda/cuda-10.0.130/lib64 -lOpenCL -o jac
-> ./jac 1000000 128 1 # requires a file data.bin with IVPs (T, pr, Yi, ...)
+> cd examples/opencl/h2o2
+> make
+> ./genic 1000000 
+> ./jac 1000000 128
 ```
 
-The generated source code is placed within the `out` (by default) directory,
-which is created if it doesn't exist initially.
-See the documentation or use `python pyjac -h` for the full list of options.
-
+The source code of this example was generated using 
+```
+> ~/.local/bin/pyjac --lang opencl --width 128 --data_order F --platform NVIDIA --input data/h2o2.inp --jac_format full
+```
 ## Theory
 
 Theory, derivations, validation and performance testing can be found in the paper

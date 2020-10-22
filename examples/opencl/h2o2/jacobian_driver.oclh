@@ -1,0 +1,22 @@
+#ifndef JACOBIAN_DRIVER_OCLH
+#define JACOBIAN_DRIVER_OCLH
+#include "mechanism.oclh"
+#include "jacobian.oclh"
+#include "vectorization.oclh"
+
+#ifndef work_size
+    #define work_size ((int) get_num_groups(0))
+#endif
+
+
+#if __OPENCL_C_VERSION__ < 120
+#pragma OPENCL EXTENSION cl_khr_fp64: enable
+#endif
+
+#define lid(N) ((int) get_local_id(N))
+#define gid(N) ((int) get_group_id(N))
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) copy_in(__global double const *__restrict__ P_arr, __global double const *__restrict__ phi, __global double *__restrict__ P_arr_local, __global double *__restrict__ phi_local, int const problem_size, int const driver_offset);
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) driver(int const problem_size, __global double const *__restrict__ t, __global double const *__restrict__ P_arr_local, __global double const *__restrict__ phi_local, __global double *__restrict__ jac_local, __global double *__restrict__ rwk);
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) copy_out(__global double *__restrict__ jac, __global double const *__restrict__ jac_local, int const problem_size, int const driver_offset);
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) jacobian_driver(int const problem_size, __global double const *__restrict__ P_arr, __global double const *__restrict__ phi, __global double *__restrict__ jac, __global double *__restrict__ rwk);
+#endif
