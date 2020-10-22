@@ -26,7 +26,7 @@ or by [opening an issue](https://github.com/SLACKHA/pyJac/issues) on our github 
 > python ./setup.py install --user
 ```
 
-## Example
+## OpenCL Example
 
 ```
 > cd examples/opencl/h2o2
