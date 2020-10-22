@@ -1,0 +1,564 @@
+/*
+
+A cog-templated skeleton for pyJac kernel execution
+
+OpenCL code adapted from:
+    Based on https://www.olcf.ornl.gov/tutorials/opencl-vector-addition/
+    and https://www.fixstars.com/en/opencl/book/OpenCLProgrammingBook/calling-the-kernel/
+
+(C) Nicholas Curtis - 2018
+
+Global declarations for Cog:
+    - codegen: path to a serialized CallgenResult instance
+    that may be loaded to generate this file
+*/
+
+#include "jacobian_main.oclh"
+#include "read_initial_conditions.oclh"
+#include "write_data.oclh"
+#include "memcpy_2d.oclh"
+
+Kernel::Kernel():
+    initialized(false),
+    compiled(false),
+    problem_size(0),
+    work_size(0)
+{
+}
+
+Kernel::~Kernel()
+{
+}
+
+void Kernel::resize(size_t problem_size, size_t work_size, bool do_not_compile)
+{
+    if (do_not_compile and !this->compiled)
+    {
+        // Assume that OpenCL kernel has previously been compiled (e.g., via a previous kernel call)
+        this->compiled = true;
+    }
+    if (this->initialized && ((work_size != this->work_size) || (problem_size != this->problem_size)))
+    {
+        this->finalize_memory();
+        this->init(problem_size, work_size);
+    }
+    else if (!this->initialized)
+    {
+        this->init(problem_size, work_size);
+    }
+}
+
+size_t Kernel::per_run()
+{
+    return this->max_per_run < this->problem_size ? this->max_per_run : this->problem_size;
+}
+
+size_t Kernel::per_run(size_t problem_size)
+{
+    return this->max_per_run < problem_size ? this->max_per_run : problem_size;
+}
+
+size_t Kernel::this_run(size_t offset)
+{
+    size_t per_run = this->per_run();
+    return this->problem_size - offset < per_run ? this->problem_size - offset : per_run;
+}
+
+const char* Kernel::build_options = "-I/home/stefanke/pyJac-v2/out -cl-std=CL1.2";
+const char* Kernel::platform_check = "NVIDIA";
+const unsigned int Kernel::device_type = CL_DEVICE_TYPE_ALL;
+
+const char* Kernel::_species_names[] = { "H2", "H", "O", "O2", "OH", "H2O", "HO2", "H2O2", "C", "CH", "CH2", "CH2(S)", "CH3", "CH4", "CO", "CO2", "HCO", "CH2O", "CH2OH", "CH3O", "CH3OH", "C2H", "C2H2", "C2H3", "C2H4", "C2H5", "C2H6", "HCCO", "CH2CO", "HCCOH", "N", "NH", "NH2", "NH3", "NNH", "NO", "NO2", "N2O", "HNO", "CN", "HCN", "H2CN", "HCNN", "HCNO", "HOCN", "HNCO", "NCO", "AR", "C3H7", "C3H8", "CH2CHO", "CH3CHO", "N2" };
+const char* Kernel::_rxn_strings[] = { "ThreeBodyReaction: 2 O + M <=> O2 + M", "ThreeBodyReaction: O + H + M <=> OH + M", "ElementaryReaction: O + H2 <=> H + OH", "ElementaryReaction: O + HO2 <=> OH + O2", "ElementaryReaction: O + H2O2 <=> OH + HO2", "ElementaryReaction: O + CH <=> H + CO", "ElementaryReaction: O + CH2 <=> H + HCO", "ElementaryReaction: O + CH2(S) <=> H2 + CO", "ElementaryReaction: O + CH2(S) <=> H + HCO", "ElementaryReaction: O + CH3 <=> H + CH2O", "ElementaryReaction: O + CH4 <=> OH + CH3", "FalloffReaction: O + CO (+M) <=> CO2 (+M)", "ElementaryReaction: O + HCO <=> OH + CO", "ElementaryReaction: O + HCO <=> H + CO2", "ElementaryReaction: O + CH2O <=> OH + HCO", "ElementaryReaction: O + CH2OH <=> OH + CH2O", "ElementaryReaction: O + CH3O <=> OH + CH2O", "ElementaryReaction: O + CH3OH <=> OH + CH2OH", "ElementaryReaction: O + CH3OH <=> OH + CH3O", "ElementaryReaction: O + C2H <=> CH + CO", "ElementaryReaction: O + C2H2 <=> H + HCCO", "ElementaryReaction: O + C2H2 <=> OH + C2H", "ElementaryReaction: O + C2H2 <=> CO + CH2", "ElementaryReaction: O + C2H3 <=> H + CH2CO", "ElementaryReaction: O + C2H4 <=> CH3 + HCO", "ElementaryReaction: O + C2H5 <=> CH3 + CH2O", "ElementaryReaction: O + C2H6 <=> OH + C2H5", "ElementaryReaction: O + HCCO <=> H + 2 CO", "ElementaryReaction: O + CH2CO <=> OH + HCCO", "ElementaryReaction: O + CH2CO <=> CH2 + CO2", "ElementaryReaction: O2 + CO <=> O + CO2", "ElementaryReaction: O2 + CH2O <=> HO2 + HCO", "ThreeBodyReaction: H + O2 + M <=> HO2 + M", "ElementaryReaction: H + 2 O2 <=> HO2 + O2", "ElementaryReaction: H + O2 + H2O <=> HO2 + H2O", "ElementaryReaction: H + O2 + N2 <=> HO2 + N2", "ElementaryReaction: H + O2 + AR <=> HO2 + AR", "ElementaryReaction: H + O2 <=> O + OH", "ThreeBodyReaction: 2 H + M <=> H2 + M", "ElementaryReaction: 2 H + H2 <=> 2 H2", "ElementaryReaction: 2 H + H2O <=> H2 + H2O", "ElementaryReaction: 2 H + CO2 <=> H2 + CO2", "ThreeBodyReaction: H + OH + M <=> H2O + M", "ElementaryReaction: H + HO2 <=> O + H2O", "ElementaryReaction: H + HO2 <=> O2 + H2", "ElementaryReaction: H + HO2 <=> 2 OH", "ElementaryReaction: H + H2O2 <=> HO2 + H2", "ElementaryReaction: H + H2O2 <=> OH + H2O", "ElementaryReaction: H + CH <=> C + H2", "FalloffReaction: H + CH2 (+M) <=> CH3 (+M)", "ElementaryReaction: H + CH2(S) <=> CH + H2", "FalloffReaction: H + CH3 (+M) <=> CH4 (+M)", "ElementaryReaction: H + CH4 <=> CH3 + H2", "FalloffReaction: H + HCO (+M) <=> CH2O (+M)", "ElementaryReaction: H + HCO <=> H2 + CO", "FalloffReaction: H + CH2O (+M) <=> CH2OH (+M)", "FalloffReaction: H + CH2O (+M) <=> CH3O (+M)", "ElementaryReaction: H + CH2O <=> HCO + H2", "FalloffReaction: H + CH2OH (+M) <=> CH3OH (+M)", "ElementaryReaction: H + CH2OH <=> H2 + CH2O", "ElementaryReaction: H + CH2OH <=> OH + CH3", "ElementaryReaction: H + CH2OH <=> CH2(S) + H2O", "FalloffReaction: H + CH3O (+M) <=> CH3OH (+M)", "ElementaryReaction: H + CH3O <=> H + CH2OH", "ElementaryReaction: H + CH3O <=> H2 + CH2O", "ElementaryReaction: H + CH3O <=> OH + CH3", "ElementaryReaction: H + CH3O <=> CH2(S) + H2O", "ElementaryReaction: H + CH3OH <=> CH2OH + H2", "ElementaryReaction: H + CH3OH <=> CH3O + H2", "FalloffReaction: H + C2H (+M) <=> C2H2 (+M)", "FalloffReaction: H + C2H2 (+M) <=> C2H3 (+M)", "FalloffReaction: H + C2H3 (+M) <=> C2H4 (+M)", "ElementaryReaction: H + C2H3 <=> H2 + C2H2", "FalloffReaction: H + C2H4 (+M) <=> C2H5 (+M)", "ElementaryReaction: H + C2H4 <=> C2H3 + H2", "FalloffReaction: H + C2H5 (+M) <=> C2H6 (+M)", "ElementaryReaction: H + C2H5 <=> H2 + C2H4", "ElementaryReaction: H + C2H6 <=> C2H5 + H2", "ElementaryReaction: H + HCCO <=> CH2(S) + CO", "ElementaryReaction: H + CH2CO <=> HCCO + H2", "ElementaryReaction: H + CH2CO <=> CH3 + CO", "ElementaryReaction: H + HCCOH <=> H + CH2CO", "FalloffReaction: H2 + CO (+M) <=> CH2O (+M)", "ElementaryReaction: OH + H2 <=> H + H2O", "FalloffReaction: 2 OH (+M) <=> H2O2 (+M)", "ElementaryReaction: 2 OH <=> O + H2O", "ElementaryReaction: OH + HO2 <=> O2 + H2O", "ElementaryReaction: OH + H2O2 <=> HO2 + H2O", "ElementaryReaction: OH + H2O2 <=> HO2 + H2O", "ElementaryReaction: OH + C <=> H + CO", "ElementaryReaction: OH + CH <=> H + HCO", "ElementaryReaction: OH + CH2 <=> H + CH2O", "ElementaryReaction: OH + CH2 <=> CH + H2O", "ElementaryReaction: OH + CH2(S) <=> H + CH2O", "FalloffReaction: OH + CH3 (+M) <=> CH3OH (+M)", "ElementaryReaction: OH + CH3 <=> CH2 + H2O", "ElementaryReaction: OH + CH3 <=> CH2(S) + H2O", "ElementaryReaction: OH + CH4 <=> CH3 + H2O", "ElementaryReaction: OH + CO <=> H + CO2", "ElementaryReaction: OH + HCO <=> H2O + CO", "ElementaryReaction: OH + CH2O <=> HCO + H2O", "ElementaryReaction: OH + CH2OH <=> H2O + CH2O", "ElementaryReaction: OH + CH3O <=> H2O + CH2O", "ElementaryReaction: OH + CH3OH <=> CH2OH + H2O", "ElementaryReaction: OH + CH3OH <=> CH3O + H2O", "ElementaryReaction: OH + C2H <=> H + HCCO", "ElementaryReaction: OH + C2H2 <=> H + CH2CO", "ElementaryReaction: OH + C2H2 <=> H + HCCOH", "ElementaryReaction: OH + C2H2 <=> C2H + H2O", "ElementaryReaction: OH + C2H2 <=> CH3 + CO", "ElementaryReaction: OH + C2H3 <=> H2O + C2H2", "ElementaryReaction: OH + C2H4 <=> C2H3 + H2O", "ElementaryReaction: OH + C2H6 <=> C2H5 + H2O", "ElementaryReaction: OH + CH2CO <=> HCCO + H2O", "ElementaryReaction: 2 HO2 <=> O2 + H2O2", "ElementaryReaction: 2 HO2 <=> O2 + H2O2", "ElementaryReaction: HO2 + CH2 <=> OH + CH2O", "ElementaryReaction: HO2 + CH3 <=> O2 + CH4", "ElementaryReaction: HO2 + CH3 <=> OH + CH3O", "ElementaryReaction: HO2 + CO <=> OH + CO2", "ElementaryReaction: HO2 + CH2O <=> HCO + H2O2", "ElementaryReaction: C + O2 <=> O + CO", "ElementaryReaction: C + CH2 <=> H + C2H", "ElementaryReaction: C + CH3 <=> H + C2H2", "ElementaryReaction: CH + O2 <=> O + HCO", "ElementaryReaction: CH + H2 <=> H + CH2", "ElementaryReaction: CH + H2O <=> H + CH2O", "ElementaryReaction: CH + CH2 <=> H + C2H2", "ElementaryReaction: CH + CH3 <=> H + C2H3", "ElementaryReaction: CH + CH4 <=> H + C2H4", "FalloffReaction: CH + CO (+M) <=> HCCO (+M)", "ElementaryReaction: CH + CO2 <=> HCO + CO", "ElementaryReaction: CH + CH2O <=> H + CH2CO", "ElementaryReaction: CH + HCCO <=> CO + C2H2", "ElementaryReaction: CH2 + O2 => OH + H + CO", "ElementaryReaction: CH2 + H2 <=> H + CH3", "ElementaryReaction: 2 CH2 <=> H2 + C2H2", "ElementaryReaction: CH2 + CH3 <=> H + C2H4", "ElementaryReaction: CH2 + CH4 <=> 2 CH3", "FalloffReaction: CH2 + CO (+M) <=> CH2CO (+M)", "ElementaryReaction: CH2 + HCCO <=> C2H3 + CO", "ElementaryReaction: CH2(S) + N2 <=> CH2 + N2", "ElementaryReaction: CH2(S) + AR <=> CH2 + AR", "ElementaryReaction: CH2(S) + O2 <=> H + OH + CO", "ElementaryReaction: CH2(S) + O2 <=> CO + H2O", "ElementaryReaction: CH2(S) + H2 <=> CH3 + H", "FalloffReaction: CH2(S) + H2O (+M) <=> CH3OH (+M)", "ElementaryReaction: CH2(S) + H2O <=> CH2 + H2O", "ElementaryReaction: CH2(S) + CH3 <=> H + C2H4", "ElementaryReaction: CH2(S) + CH4 <=> 2 CH3", "ElementaryReaction: CH2(S) + CO <=> CH2 + CO", "ElementaryReaction: CH2(S) + CO2 <=> CH2 + CO2", "ElementaryReaction: CH2(S) + CO2 <=> CO + CH2O", "ElementaryReaction: CH2(S) + C2H6 <=> CH3 + C2H5", "ElementaryReaction: CH3 + O2 <=> O + CH3O", "ElementaryReaction: CH3 + O2 <=> OH + CH2O", "ElementaryReaction: CH3 + H2O2 <=> HO2 + CH4", "FalloffReaction: 2 CH3 (+M) <=> C2H6 (+M)", "ElementaryReaction: 2 CH3 <=> H + C2H5", "ElementaryReaction: CH3 + HCO <=> CH4 + CO", "ElementaryReaction: CH3 + CH2O <=> HCO + CH4", "ElementaryReaction: CH3 + CH3OH <=> CH2OH + CH4", "ElementaryReaction: CH3 + CH3OH <=> CH3O + CH4", "ElementaryReaction: CH3 + C2H4 <=> C2H3 + CH4", "ElementaryReaction: CH3 + C2H6 <=> C2H5 + CH4", "ElementaryReaction: HCO + H2O <=> H + CO + H2O", "ThreeBodyReaction: HCO + M <=> H + CO + M", "ElementaryReaction: HCO + O2 <=> HO2 + CO", "ElementaryReaction: CH2OH + O2 <=> HO2 + CH2O", "ElementaryReaction: CH3O + O2 <=> HO2 + CH2O", "ElementaryReaction: C2H + O2 <=> HCO + CO", "ElementaryReaction: C2H + H2 <=> H + C2H2", "ElementaryReaction: C2H3 + O2 <=> HCO + CH2O", "FalloffReaction: C2H4 (+M) <=> H2 + C2H2 (+M)", "ElementaryReaction: C2H5 + O2 <=> HO2 + C2H4", "ElementaryReaction: HCCO + O2 <=> OH + 2 CO", "ElementaryReaction: 2 HCCO <=> 2 CO + C2H2", "ElementaryReaction: N + NO <=> N2 + O", "ElementaryReaction: N + O2 <=> NO + O", "ElementaryReaction: N + OH <=> NO + H", "ElementaryReaction: N2O + O <=> N2 + O2", "ElementaryReaction: N2O + O <=> 2 NO", "ElementaryReaction: N2O + H <=> N2 + OH", "ElementaryReaction: N2O + OH <=> N2 + HO2", "FalloffReaction: N2O (+M) <=> N2 + O (+M)", "ElementaryReaction: HO2 + NO <=> NO2 + OH", "ThreeBodyReaction: NO + O + M <=> NO2 + M", "ElementaryReaction: NO2 + O <=> NO + O2", "ElementaryReaction: NO2 + H <=> NO + OH", "ElementaryReaction: NH + O <=> NO + H", "ElementaryReaction: NH + H <=> N + H2", "ElementaryReaction: NH + OH <=> HNO + H", "ElementaryReaction: NH + OH <=> N + H2O", "ElementaryReaction: NH + O2 <=> HNO + O", "ElementaryReaction: NH + O2 <=> NO + OH", "ElementaryReaction: NH + N <=> N2 + H", "ElementaryReaction: NH + H2O <=> HNO + H2", "ElementaryReaction: NH + NO <=> N2 + OH", "ElementaryReaction: NH + NO <=> N2O + H", "ElementaryReaction: NH2 + O <=> OH + NH", "ElementaryReaction: NH2 + O <=> H + HNO", "ElementaryReaction: NH2 + H <=> NH + H2", "ElementaryReaction: NH2 + OH <=> NH + H2O", "ElementaryReaction: NNH <=> N2 + H", "ThreeBodyReaction: NNH + M <=> N2 + H + M", "ElementaryReaction: NNH + O2 <=> HO2 + N2", "ElementaryReaction: NNH + O <=> OH + N2", "ElementaryReaction: NNH + O <=> NH + NO", "ElementaryReaction: NNH + H <=> H2 + N2", "ElementaryReaction: NNH + OH <=> H2O + N2", "ElementaryReaction: NNH + CH3 <=> CH4 + N2", "ThreeBodyReaction: H + NO + M <=> HNO + M", "ElementaryReaction: HNO + O <=> NO + OH", "ElementaryReaction: HNO + H <=> H2 + NO", "ElementaryReaction: HNO + OH <=> NO + H2O", "ElementaryReaction: HNO + O2 <=> HO2 + NO", "ElementaryReaction: CN + O <=> CO + N", "ElementaryReaction: CN + OH <=> NCO + H", "ElementaryReaction: CN + H2O <=> HCN + OH", "ElementaryReaction: CN + O2 <=> NCO + O", "ElementaryReaction: CN + H2 <=> HCN + H", "ElementaryReaction: NCO + O <=> NO + CO", "ElementaryReaction: NCO + H <=> NH + CO", "ElementaryReaction: NCO + OH <=> NO + H + CO", "ElementaryReaction: NCO + N <=> N2 + CO", "ElementaryReaction: NCO + O2 <=> NO + CO2", "ThreeBodyReaction: NCO + M <=> N + CO + M", "ElementaryReaction: NCO + NO <=> N2O + CO", "ElementaryReaction: NCO + NO <=> N2 + CO2", "ThreeBodyReaction: HCN + M <=> H + CN + M", "ElementaryReaction: HCN + O <=> NCO + H", "ElementaryReaction: HCN + O <=> NH + CO", "ElementaryReaction: HCN + O <=> CN + OH", "ElementaryReaction: HCN + OH <=> HOCN + H", "ElementaryReaction: HCN + OH <=> HNCO + H", "ElementaryReaction: HCN + OH <=> NH2 + CO", "FalloffReaction: H + HCN (+M) <=> H2CN (+M)", "ElementaryReaction: H2CN + N <=> N2 + CH2", "ElementaryReaction: C + N2 <=> CN + N", "ElementaryReaction: CH + N2 <=> HCN + N", "FalloffReaction: CH + N2 (+M) <=> HCNN (+M)", "ElementaryReaction: CH2 + N2 <=> HCN + NH", "ElementaryReaction: CH2(S) + N2 <=> NH + HCN", "ElementaryReaction: C + NO <=> CN + O", "ElementaryReaction: C + NO <=> CO + N", "ElementaryReaction: CH + NO <=> HCN + O", "ElementaryReaction: CH + NO <=> H + NCO", "ElementaryReaction: CH + NO <=> N + HCO", "ElementaryReaction: CH2 + NO <=> H + HNCO", "ElementaryReaction: CH2 + NO <=> OH + HCN", "ElementaryReaction: CH2 + NO <=> H + HCNO", "ElementaryReaction: CH2(S) + NO <=> H + HNCO", "ElementaryReaction: CH2(S) + NO <=> OH + HCN", "ElementaryReaction: CH2(S) + NO <=> H + HCNO", "ElementaryReaction: CH3 + NO <=> HCN + H2O", "ElementaryReaction: CH3 + NO <=> H2CN + OH", "ElementaryReaction: HCNN + O <=> CO + H + N2", "ElementaryReaction: HCNN + O <=> HCN + NO", "ElementaryReaction: HCNN + O2 <=> O + HCO + N2", "ElementaryReaction: HCNN + OH <=> H + HCO + N2", "ElementaryReaction: HCNN + H <=> CH2 + N2", "ElementaryReaction: HNCO + O <=> NH + CO2", "ElementaryReaction: HNCO + O <=> HNO + CO", "ElementaryReaction: HNCO + O <=> NCO + OH", "ElementaryReaction: HNCO + H <=> NH2 + CO", "ElementaryReaction: HNCO + H <=> H2 + NCO", "ElementaryReaction: HNCO + OH <=> NCO + H2O", "ElementaryReaction: HNCO + OH <=> NH2 + CO2", "ThreeBodyReaction: HNCO + M <=> NH + CO + M", "ElementaryReaction: HCNO + H <=> H + HNCO", "ElementaryReaction: HCNO + H <=> OH + HCN", "ElementaryReaction: HCNO + H <=> NH2 + CO", "ElementaryReaction: HOCN + H <=> H + HNCO", "ElementaryReaction: HCCO + NO <=> HCNO + CO", "ElementaryReaction: CH3 + N <=> H2CN + H", "ElementaryReaction: CH3 + N <=> HCN + H2", "ElementaryReaction: NH3 + H <=> NH2 + H2", "ElementaryReaction: NH3 + OH <=> NH2 + H2O", "ElementaryReaction: NH3 + O <=> NH2 + OH", "ElementaryReaction: NH + CO2 <=> HNO + CO", "ElementaryReaction: CN + NO2 <=> NCO + NO", "ElementaryReaction: NCO + NO2 <=> N2O + CO2", "ElementaryReaction: N + CO2 <=> NO + CO", "ElementaryReaction: O + CH3 => H + H2 + CO", "ElementaryReaction: O + C2H4 <=> H + CH2CHO", "ElementaryReaction: O + C2H5 <=> H + CH3CHO", "ElementaryReaction: OH + HO2 <=> O2 + H2O", "ElementaryReaction: OH + CH3 => H2 + CH2O", "FalloffReaction: CH + H2 (+M) <=> CH3 (+M)", "ElementaryReaction: CH2 + O2 => 2 H + CO2", "ElementaryReaction: CH2 + O2 <=> O + CH2O", "ElementaryReaction: 2 CH2 => 2 H + C2H2", "ElementaryReaction: CH2(S) + H2O => H2 + CH2O", "ElementaryReaction: C2H3 + O2 <=> O + CH2CHO", "ElementaryReaction: C2H3 + O2 <=> HO2 + C2H2", "ElementaryReaction: O + CH3CHO <=> OH + CH2CHO", "ElementaryReaction: O + CH3CHO => OH + CH3 + CO", "ElementaryReaction: O2 + CH3CHO => HO2 + CH3 + CO", "ElementaryReaction: H + CH3CHO <=> CH2CHO + H2", "ElementaryReaction: H + CH3CHO => CH3 + H2 + CO", "ElementaryReaction: OH + CH3CHO => CH3 + H2O + CO", "ElementaryReaction: HO2 + CH3CHO => CH3 + H2O2 + CO", "ElementaryReaction: CH3 + CH3CHO => CH3 + CH4 + CO", "FalloffReaction: H + CH2CO (+M) <=> CH2CHO (+M)", "ElementaryReaction: O + CH2CHO => H + CH2 + CO2", "ElementaryReaction: O2 + CH2CHO => OH + CO + CH2O", "ElementaryReaction: O2 + CH2CHO => OH + 2 HCO", "ElementaryReaction: H + CH2CHO <=> CH3 + HCO", "ElementaryReaction: H + CH2CHO <=> CH2CO + H2", "ElementaryReaction: OH + CH2CHO <=> H2O + CH2CO", "ElementaryReaction: OH + CH2CHO <=> HCO + CH2OH", "FalloffReaction: CH3 + C2H5 (+M) <=> C3H8 (+M)", "ElementaryReaction: O + C3H8 <=> OH + C3H7", "ElementaryReaction: H + C3H8 <=> C3H7 + H2", "ElementaryReaction: OH + C3H8 <=> C3H7 + H2O", "ElementaryReaction: C3H7 + H2O2 <=> HO2 + C3H8", "ElementaryReaction: CH3 + C3H8 <=> C3H7 + CH4", "FalloffReaction: CH3 + C2H4 (+M) <=> C3H7 (+M)", "ElementaryReaction: O + C3H7 <=> C2H5 + CH2O", "FalloffReaction: H + C3H7 (+M) <=> C3H8 (+M)", "ElementaryReaction: H + C3H7 <=> CH3 + C2H5", "ElementaryReaction: OH + C3H7 <=> C2H5 + CH2OH", "ElementaryReaction: HO2 + C3H7 <=> O2 + C3H8", "ElementaryReaction: HO2 + C3H7 => OH + C2H5 + CH2O", "ElementaryReaction: CH3 + C3H7 <=> 2 C2H5" };
+const char* Kernel::_order = "F";
+const unsigned int Kernel::_nsp = 53;
+const unsigned int Kernel::_nrxn = 325;
+// vector width
+const unsigned int Kernel::_vector_width = 128;
+
+
+/*
+Create Opencl Kernel
+
+Parameters
+----------
+problem_size : size_t
+	The total number of conditions to execute this kernel over
+work_size : size_t
+	The number of OpenCL groups to launch.
+If using GPUs, this is the # of CUDA blocks to use.
+If for CPUs, this is the number of logical cores to use.
+*/
+
+void Kernel::init(size_t problem_size, size_t work_size)
+{
+    cl_platform_id platform_id[NUM_PLATFORMS];
+    cl_device_id device_ids[MAX_DEVICE];
+    cl_uint ret_num_platforms;
+    cl_uint ret_num_devices;
+    cl_uint num_devices = 1;
+    cl_int return_code;
+    cl_device_type device_type = this->device_type;
+
+    if (!this->compiled)
+    {
+        this->compile();
+    }
+
+    size_t source_size;
+    unsigned char* source_bin;
+
+    FILE *fp;
+
+    /* Load compiled kernel binary */
+    fp = fopen(this->kernel_path, "rb");
+    if (!fp) {
+        fprintf(stderr, "Compiled kernel binary file: %s not found!\n", this->kernel_path);
+        exit(EXIT_FAILURE);
+    }
+    //find file size
+    fseek(fp, 0L, SEEK_END);
+    source_size = ftell(fp);
+    rewind(fp);
+
+    //read file
+    source_bin = (unsigned char*)malloc(source_size);
+    cassert(fread(source_bin, 1, source_size, fp) == source_size, "Error reading source binary...");
+    fclose(fp);
+
+    /* Get platform/device information */
+    check_err(clGetPlatformIDs(NUM_PLATFORMS, platform_id, &ret_num_platforms));
+    cl_platform_id pid = NULL;
+    for (unsigned int i = 0; i < ret_num_platforms; ++i)
+    {
+        //check if matches user-supplied platform
+        char pvendor[100];
+        size_t psize = 100 * sizeof(char);
+        check_err(clGetPlatformInfo(platform_id[i], CL_PLATFORM_VENDOR, psize, pvendor, NULL));
+        if(strstr(pvendor, platform_check) != NULL)
+        {
+            pid = platform_id[i];
+            break;
+        }
+    }
+    cassert(pid != NULL, "Platform not found");
+
+    if (device_type != CL_DEVICE_TYPE_GPU)
+    {
+        //we're going to create a subdevice limited to work_size # of cores
+        //all systems tested show multi-cpus as a single device.
+        num_devices = 1;
+    }
+    else if (num_devices >= MAX_DEVICE)
+    {
+        fprintf(stderr, "Cannot create program with %d devices, please update MAX_DEVICE definition.\n", num_devices);
+        exit(EXIT_FAILURE);
+    }
+
+    //get the device
+    check_err(clGetDeviceIDs(pid, device_type, num_devices, device_ids, &ret_num_devices));
+
+    cassert(ret_num_devices > 0, "No devices found!");
+
+    //now we need to create subdevices for the CPU
+    if (device_type == CL_DEVICE_TYPE_CPU)
+    {
+        cl_uint num_compute;
+        //first get the maximum number of sub partitions (i.e. logical threads)
+        check_err(clGetDeviceInfo(device_ids[0], CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(num_compute), &num_compute, NULL));
+        cassert(work_size <= num_compute, "Too many cores used...");
+
+        //ok, now we know we're ok
+        //let's create a subdevice with the required number of compute units
+        // Partition properties
+        cl_device_partition_property properties[3];
+        // Partition type
+        properties[0] = CL_DEVICE_PARTITION_BY_COUNTS;
+        // number of compute units
+        properties[1] = work_size;
+        // List end
+        properties[2] = CL_DEVICE_PARTITION_BY_COUNTS_LIST_END;
+
+        // Specifies the size of the out_devices array
+        cl_uint num_sub_devices = 1;
+        // Provides a buffer for the generated subdevices with a number of elements specified by num_sub_devices
+        cl_device_id sub_device_ids;
+        // Create the subdevices for the device_id device
+        check_err(clCreateSubDevices(device_ids[0], properties, num_sub_devices, &sub_device_ids, &ret_num_devices));
+        cassert(ret_num_devices > 0, "No sub-devices could be created!");
+        //and assign to the device_ids
+        device_ids[0] = sub_device_ids;
+        num_devices = num_sub_devices;
+    }
+
+    //for the moment, limit to one device
+    cassert(num_devices == 1, "Currently limited to a single device");
+
+    //create context
+    this->context = clCreateContext(NULL, num_devices, &device_ids[0], NULL, NULL, &return_code);
+    check_err(return_code);
+
+    //create queue
+    this->queue = clCreateCommandQueue(this->context, device_ids[0], 0, &return_code);
+    check_err(return_code);
+
+    /* Create Kernel program from the read in source binary */
+    cl_int bin_status;
+    this->program = clCreateProgramWithBinary(context, num_devices, &device_ids[0], (const size_t*)&source_size,
+                                              (const unsigned char**)&source_bin, &bin_status, &return_code);
+    check_err(bin_status);
+    check_err(return_code);
+
+    /* Build Program */
+    return_code = clBuildProgram(this->program, num_devices, &device_ids[0], this->build_options, NULL, NULL);
+    if (return_code != CL_SUCCESS)
+    {
+          fprintf(stderr, "OpenCL failed to build the program...\n");
+
+          size_t len;
+          char *buffer;
+          check_err(clGetProgramBuildInfo(this->program, device_ids[0], CL_PROGRAM_BUILD_LOG, sizeof(char*), NULL, &len));
+          buffer = (char*)calloc(len, sizeof(char));
+          check_err(clGetProgramBuildInfo(this->program, device_ids[0], CL_PROGRAM_BUILD_LOG, len * sizeof(char), buffer, NULL));
+          fprintf(stderr, "%s\n", buffer);
+          free(buffer);
+
+          clGetProgramBuildInfo(this->program, device_ids[0], CL_PROGRAM_BUILD_STATUS, sizeof(char*), NULL, &len);
+          buffer = (char*)calloc(len, sizeof(char));
+          clGetProgramBuildInfo(this->program, device_ids[0], CL_PROGRAM_BUILD_STATUS, len * sizeof(char), buffer, NULL);
+          fprintf(stderr, "%s\n", buffer);
+          free(buffer);
+
+          check_err(return_code);
+    }
+
+    free(source_bin);
+
+    this->mem_init(problem_size, work_size);
+    // mark initialized
+    this->initialized = true;
+    this->problem_size = problem_size;
+    this->work_size = work_size;
+}
+
+
+/*
+   Destroys the kernel object, will not be usable again
+*/
+void Kernel::finalize()
+{
+    if(this->initialized)
+    {
+        check_err(clReleaseProgram(this->program));
+        check_err(clReleaseCommandQueue(this->queue));
+        check_err(clReleaseContext(this->context));
+
+        // mark deinit
+        this->compiled = false;
+        this->initialized = false;
+    }
+}
+
+
+/*
+
+
+Parameters
+----------
+problem_size : size_t
+	The total number of conditions to execute this kernel over
+work_size : size_t
+	The number of OpenCL groups to launch.
+If using GPUs, this is the # of CUDA blocks to use.
+If for CPUs, this is the number of logical cores to use.
+*/
+
+
+void JacobianKernel::mem_init(size_t problem_size, size_t work_size)
+{
+    size_t per_run = this->d_per_run = this->per_run(problem_size);
+    #ifndef PINNED
+        #if CL_LEVEL >= 120
+            // with CL 1.2, we have access to clEnqueueFillBuffer
+            double zero = 0;
+        #else
+            // otherwise, we need a zero buffer to use clEnqueueWriteBuffer
+            double* zero = (double*)malloc((2916 * problem_size > 709888 * work_size ? 2916 * problem_size : 709888 * work_size) * sizeof(double));
+            memset(zero, 0, (2916 * problem_size > 709888 * work_size ? 2916 * problem_size : 709888 * work_size) * sizeof(double));
+        #endif
+    #endif
+
+    /* If we've run out of constant memory space, we will place converted
+       global constant here */
+
+    cl_int return_code;
+
+    /* Alloc buffers */
+
+    this->d_P_arr = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, per_run * sizeof(double), NULL, &return_code);
+    check_err(return_code);
+
+    this->d_phi = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, 54 * per_run * sizeof(double), NULL, &return_code);
+    check_err(return_code);
+
+    this->d_jac = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, 2916 * per_run * sizeof(double), NULL, &return_code);
+    check_err(return_code);
+
+    this->d_rwk = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, work_size*709888 * sizeof(double), NULL, &return_code);
+    check_err(return_code);
+
+    /* and memset to zero */
+
+    // map to host address space for initialization
+    h_temp_d = (double*)clEnqueueMapBuffer(queue, this->d_P_arr, CL_TRUE, CL_MAP_WRITE, 0, per_run * sizeof(double), 0, NULL, NULL, &return_code);
+    check_err(return_code);
+    // set memory
+    memset(h_temp_d, 0, per_run * sizeof(double));
+    // and unmap back to device
+    check_err(clEnqueueUnmapMemObject(queue, this->d_P_arr, h_temp_d, 0, NULL, NULL));
+
+    // map to host address space for initialization
+    h_temp_d = (double*)clEnqueueMapBuffer(queue, this->d_phi, CL_TRUE, CL_MAP_WRITE, 0, 54 * per_run * sizeof(double), 0, NULL, NULL, &return_code);
+    check_err(return_code);
+    // set memory
+    memset(h_temp_d, 0, 54 * per_run * sizeof(double));
+    // and unmap back to device
+    check_err(clEnqueueUnmapMemObject(queue, this->d_phi, h_temp_d, 0, NULL, NULL));
+
+    // map to host address space for initialization
+    h_temp_d = (double*)clEnqueueMapBuffer(queue, this->d_jac, CL_TRUE, CL_MAP_WRITE, 0, 2916 * per_run * sizeof(double), 0, NULL, NULL, &return_code);
+    check_err(return_code);
+    // set memory
+    memset(h_temp_d, 0, 2916 * per_run * sizeof(double));
+    // and unmap back to device
+    check_err(clEnqueueUnmapMemObject(queue, this->d_jac, h_temp_d, 0, NULL, NULL));
+
+    // map to host address space for initialization
+    h_temp_d = (double*)clEnqueueMapBuffer(queue, this->d_rwk, CL_TRUE, CL_MAP_WRITE, 0, work_size*709888 * sizeof(double), 0, NULL, NULL, &return_code);
+    check_err(return_code);
+    // set memory
+    memset(h_temp_d, 0, work_size*709888 * sizeof(double));
+    // and unmap back to device
+    check_err(clEnqueueUnmapMemObject(queue, this->d_rwk, h_temp_d, 0, NULL, NULL));
+
+
+    /* Transfer host constants here (if any), as we only need to do so once */
+
+    #if CL_LEVEL < 120
+        free(zero);
+    #endif
+
+    /* Create OpenCL Kernel */
+    this->kernel = clCreateKernel(program, "jacobian_driver", &return_code);
+    check_err(return_code);
+
+    /* Kernel arg setting */
+
+    check_err(clSetKernelArg(kernel, 0, sizeof(cl_uint), &this->d_per_run));
+    check_err(clSetKernelArg(kernel, 1, sizeof(cl_mem), &this->d_P_arr));
+    check_err(clSetKernelArg(kernel, 2, sizeof(cl_mem), &this->d_phi));
+    check_err(clSetKernelArg(kernel, 3, sizeof(cl_mem), &this->d_jac));
+    check_err(clSetKernelArg(kernel, 4, sizeof(cl_mem), &this->d_rwk));
+}
+
+void JacobianKernel::finalize_memory()
+{
+    /* Finalization of our current queue / kernel */
+    check_err(clFlush(this->queue));
+    check_err(clReleaseKernel(this->kernel));
+    check_err(clFinish(this->queue));
+    /* Free Memory */
+    check_err(clReleaseMemObject(this->d_P_arr));
+    check_err(clReleaseMemObject(this->d_phi));
+    check_err(clReleaseMemObject(this->d_jac));
+    check_err(clReleaseMemObject(this->d_rwk));
+}
+
+const std::size_t JacobianKernel::requiredMemorySize() const
+{
+    return work_size*709888 * sizeof(double);
+}
+
+/*
+Default constructor (requires resize before use)
+
+Parameters
+----------
+
+*/
+
+JacobianKernel::JacobianKernel()
+{
+    this->max_per_run = 9223372036854775808;
+    this->num_source = 5;
+    this->kernel_path = "/home/stefanke/pyJac-v2/out/jacobian.bin";
+
+}
+
+
+/*
+Initializing contstructor
+
+Parameters
+----------
+problem_size : size_t
+	The total number of conditions to execute this kernel over
+work_size : size_t
+	The number of OpenCL groups to launch.
+If using GPUs, this is the # of CUDA blocks to use.
+If for CPUs, this is the number of logical cores to use.
+do_not_compile : bool
+	If true, the OpenCL kernel has already been compiled (e.g., via previous kernel call) and does not need recompilation. False by default.
+
+ Note: If this kernel object has already been executed, the OpenCL kernel has been compiled and will not be recompiled regardless of the status of this flag.
+*/
+
+JacobianKernel::JacobianKernel(size_t problem_size, size_t work_size, bool do_not_compile)
+{
+    this->max_per_run = 9223372036854775808;
+    this->compiled = do_not_compile;
+    this->num_source = 5;
+    this->kernel_path = "/home/stefanke/pyJac-v2/out/jacobian.bin";
+this->init(problem_size, work_size);
+}
+
+/*
+Execute the Opencl kernel 'jacobian'
+
+Parameters
+----------
+P_arr : double
+	The array of pressures.
+phi : double
+	The state vector
+jac : double
+	The Jacobian of the time-rate of change of the state vector
+*/
+
+JacobianKernel::~JacobianKernel()
+{
+  this->finalize_memory();
+  this->finalize();
+}
+void JacobianKernel::operator()(double* h_P_arr, double* h_phi, double* h_jac)
+{
+    cassert(this->initialized, "Must initialize kernel (e.g., via resize()) before use.");
+    // error checking for pinned memory transfers
+    cl_int return_code;
+
+    size_t per_run = this->d_per_run = this->per_run();
+
+    for (size_t offset = 0; offset < this->problem_size; offset += per_run)
+    {
+        size_t this_run = this->this_run(offset);
+
+        size_t global_work_size = this->work_size;
+        size_t local_work_size = 128;
+        #if !defined(EXPLICIT_SIMD)
+            // need to multiply global worksize by local worksize
+            // to get correct number of global items (as)
+            global_work_size *= local_work_size;
+        #endif
+
+        // Memory Transfers into the kernel, if any
+        // map to host address space for initialization
+        h_temp_d = (double*)clEnqueueMapBuffer(queue, this->d_P_arr, CL_TRUE, CL_MAP_WRITE, 0, per_run * sizeof(double), 0, NULL, NULL, &return_code);
+        check_err(return_code);
+        // set memory
+        memcpy(h_temp_d, &h_P_arr[offset * 1], this_run * sizeof(double));
+        // and unmap back to device
+        check_err(clEnqueueUnmapMemObject(queue, this->d_P_arr, h_temp_d, 0, NULL, NULL));
+
+        // map to host address space for initialization
+        h_temp_d = (double*)clEnqueueMapBuffer(queue, this->d_phi, CL_TRUE, CL_MAP_WRITE, 0, 54 * per_run * sizeof(double), 0, NULL, NULL, &return_code);
+        check_err(return_code);
+        // set memory
+        {
+            const size_t host_origin[3] = {offset * sizeof(double), 0, 0};
+            const size_t region[3] = {this_run * sizeof(double), 54, 1};
+            memcpy2D_in(h_phi, h_temp_d, &host_origin[0], &region[0], per_run * sizeof(double), 0, problem_size * sizeof(double), 0);
+        }
+
+        // and unmap back to device
+        check_err(clEnqueueUnmapMemObject(queue, this->d_phi, h_temp_d, 0, NULL, NULL));
+
+        // run kernel
+        check_err(clEnqueueNDRangeKernel(queue, this->kernel, 1, NULL, &global_work_size, &local_work_size, 0, NULL, NULL));
+
+        // Memory Transfers out
+        // map to host address space for initialization
+        h_temp_d = (double*)clEnqueueMapBuffer(queue, this->d_jac, CL_TRUE, CL_MAP_READ, 0, 2916 * per_run * sizeof(double), 0, NULL, NULL, &return_code);
+        check_err(return_code);
+        // set memory
+        {
+            const size_t host_origin[3] = {offset * sizeof(double), 0, 0};
+            const size_t region[3] = {this_run * sizeof(double), 2916, 1};
+            memcpy2D_out(h_jac, h_temp_d, &host_origin[0], &region[0], per_run * sizeof(double), 0, problem_size * sizeof(double), 0);
+        }
+
+        // and unmap back to device
+        check_err(clEnqueueUnmapMemObject(queue, this->d_jac, h_temp_d, 0, NULL, NULL));
+
+    }
+}
+
+
+int main(int argc, char* argv[])
+{
+
+    //check args
+    cassert(argc >= 3, "Missing arguments...");
+
+    //arglist is:
+    //#0 - the program name
+    //#1 - the problem size
+    //#2 - the number of cores / threads [CPU/Accelerator] or number GPU blocks [GPU only]
+    //#3 - whether to compile
+
+    size_t problem_size = atoi(argv[1]);
+    size_t work_size = atoi(argv[2]);
+    int compile = 1;
+    if (argc >= 4)
+        compile = atoi(argv[3]);
+
+    double* h_P_arr_local;
+    double* h_phi_local;
+    double* h_jac_local;
+    h_P_arr_local = (double*)malloc(problem_size * sizeof(double));
+    cassert(h_P_arr_local != NULL, "malloc failed");
+    h_phi_local = (double*)malloc(54 * problem_size * sizeof(double));
+    cassert(h_phi_local != NULL, "malloc failed");
+    h_jac_local = (double*)malloc(2916 * problem_size * sizeof(double));
+    cassert(h_jac_local != NULL, "malloc failed");
+
+    //read input data
+    read_initial_conditions("data.bin", problem_size, h_P_arr_local, h_phi_local, 'F');
+    JacobianKernel kernel;
+    //first compile to binary
+    double compilation_time = -1;
+    if (compile)
+    {
+        StartTimer();
+        kernel.compile();
+        compilation_time = GetTimer();
+    }
+
+    StartTimer();
+    kernel.resize(problem_size, work_size, !compile);
+    double setup_time = GetTimer();
+    StartTimer();
+    kernel(h_P_arr_local, h_phi_local, h_jac_local);
+    double runtime = GetTimer();
+
+    printf("%zu,%.15le,%.15le,%.15le\n", problem_size, compilation_time,
+                setup_time, runtime);
+
+    // write output to file if supplied
+
+    // local frees
+    free(h_P_arr_local);
+    free(h_phi_local);
+    free(h_jac_local);
+
+    return 0;
+}

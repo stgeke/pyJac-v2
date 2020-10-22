@@ -1,0 +1,1157 @@
+#include "jacobian.oclh"
+
+
+
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) reset_arrays(__global double *__restrict__ jac)
+{
+  int col;
+  int row;
+
+  for (int i = 0; i <= 2915; ++i)
+  {
+    col = (i % 54);
+    row = (i / 54);
+    jac[128 * gid(0) + lid(0) + work_size * 128 * row + work_size * 128 * 54 * col] = 0.0;
+  }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dRopidnj(__global double const *__restrict__ pres_mod, __global double const *__restrict__ kf, __global double const *__restrict__ kr, __global double const *__restrict__ conc, __global double *__restrict__ jac)
+{
+  double Sj_fwd;
+  double Sj_rev;
+  double ci;
+  int i_0;
+  int i_1;
+  int inner_offset;
+  int inner_offset_next;
+  double kf_i;
+  double kr_i;
+  int net_offset;
+  int net_offset_next;
+  int nu_fwd;
+  int nu_k;
+  int nu_rev;
+  int spec_inner;
+  int spec_j;
+  int spec_k;
+
+  for (int i = 0; i <= 324; ++i)
+  {
+    kr_i = 0.0;
+    kf_i = kf[128 * gid(0) + lid(0) + work_size * 128 * i];
+    inner_offset_next = net_reac_to_spec_offsets[1 + i];
+    inner_offset = net_reac_to_spec_offsets[i];
+    net_offset_next = net_reac_to_spec_offsets[1 + i];
+    net_offset = net_reac_to_spec_offsets[i];
+    i_1 = rev_mask[i];
+    if (rev_mask[i] >= 0)
+      kr_i = kr[128 * gid(0) + lid(0) + work_size * 128 * i_1];
+    i_0 = thd_mask[i];
+    ci = 1.0;
+    if (thd_mask[i] >= 0)
+      ci = pres_mod[128 * gid(0) + lid(0) + work_size * 128 * i_0];
+    for (int net_ind_k = net_offset; net_ind_k <= -1 + net_offset_next; ++net_ind_k)
+      if (-1 + -1 * inner_offset + inner_offset_next >= 0)
+      {
+        spec_k = rxn_to_spec[net_ind_k];
+        if (spec_k != 52)
+        {
+          nu_k = reac_to_spec_nu[2 * net_ind_k] + -1 * reac_to_spec_nu[1 + 2 * net_ind_k];
+          for (int net_ind_j = inner_offset; net_ind_j <= -1 + inner_offset_next; ++net_ind_j)
+          {
+            spec_j = rxn_to_spec[net_ind_j];
+            if (spec_j != 52)
+            {
+              Sj_rev = reac_to_spec_nu[2 * net_ind_j];
+              Sj_fwd = reac_to_spec_nu[1 + 2 * net_ind_j];
+              for (int net_ind_inner = inner_offset; net_ind_inner <= -1 + inner_offset_next; ++net_ind_inner)
+              {
+                nu_rev = reac_to_spec_nu[2 * net_ind_inner];
+                nu_fwd = reac_to_spec_nu[1 + 2 * net_ind_inner];
+                spec_inner = rxn_to_spec[net_ind_inner];
+                if (spec_inner == spec_j)
+                {
+                  nu_rev = nu_rev + -1;
+                  nu_fwd = nu_fwd + -1;
+                }
+                Sj_rev = Sj_rev * fast_powi(fmax(1e-300, conc[128 * gid(0) + lid(0) + work_size * 128 * spec_inner]), nu_rev);
+                Sj_fwd = Sj_fwd * fast_powi(fmax(1e-300, conc[128 * gid(0) + lid(0) + work_size * 128 * spec_inner]), nu_fwd);
+              }
+              jac[128 * gid(0) + lid(0) + work_size * 128 * (spec_k + 2) + work_size * 128 * 54 * (spec_j + 2)] = jac[128 * gid(0) + lid(0) + work_size * 128 * (spec_k + 2) + work_size * 128 * 54 * (spec_j + 2)] + (kf_i * Sj_fwd + -1.0 * kr_i * Sj_rev) * ci * nu_k;
+            }
+          }
+        }
+      }
+  }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dRopidnj_ns(__global double const *__restrict__ pres_mod, __global double const *__restrict__ kf, __global double const *__restrict__ kr, __global double const *__restrict__ conc, __global double *__restrict__ jac)
+{
+  double Sns_fwd;
+  double Sns_rev;
+  double ci;
+  int i_0;
+  int inner_offset;
+  int inner_offset_next;
+  double jac_updater;
+  double kf_i;
+  double kr_i;
+  int net_offset;
+  int net_offset_next;
+  int nu_fwd;
+  int nu_k;
+  int nu_rev;
+  int spec_inner;
+  int spec_k;
+
+  for (int i = 0; i <= 27; ++i)
+  {
+    kr_i = 0.0;
+    i_0 = rxn_has_ns[i];
+    if (rev_mask[i_0] >= 0)
+      kr_i = kr[128 * gid(0) + lid(0) + work_size * 128 * rev_mask[i_0]];
+    kf_i = kf[128 * gid(0) + lid(0) + work_size * 128 * i_0];
+    inner_offset_next = net_reac_to_spec_offsets[i_0 + 1];
+    inner_offset = net_reac_to_spec_offsets[i_0];
+    net_offset_next = net_reac_to_spec_offsets[i_0 + 1];
+    net_offset = net_reac_to_spec_offsets[i_0];
+    ci = 1.0;
+    if (thd_mask[i_0] >= 0)
+      ci = pres_mod[128 * gid(0) + lid(0) + work_size * 128 * thd_mask[i_0]];
+    for (int net_ind_k = net_offset; net_ind_k <= -1 + net_offset_next; ++net_ind_k)
+      if (-1 + -1 * inner_offset + inner_offset_next >= 0)
+      {
+        spec_k = rxn_to_spec[net_ind_k];
+        if (spec_k != 52)
+        {
+          nu_k = reac_to_spec_nu[2 * net_ind_k] + -1 * reac_to_spec_nu[1 + 2 * net_ind_k];
+          Sns_rev = 1.0;
+          Sns_fwd = 1.0;
+          for (int net_ind_inner = inner_offset; net_ind_inner <= -1 + inner_offset_next; ++net_ind_inner)
+          {
+            nu_rev = reac_to_spec_nu[2 * net_ind_inner];
+            nu_fwd = reac_to_spec_nu[1 + 2 * net_ind_inner];
+            spec_inner = rxn_to_spec[net_ind_inner];
+            if (spec_inner == 52)
+            {
+              Sns_rev = Sns_rev * nu_rev;
+              nu_rev = nu_rev + -1;
+            }
+            Sns_rev = Sns_rev * fast_powi(fmax(1e-300, conc[128 * gid(0) + lid(0) + work_size * 128 * spec_inner]), nu_rev);
+            if (spec_inner == 52)
+            {
+              Sns_fwd = Sns_fwd * nu_fwd;
+              nu_fwd = nu_fwd + -1;
+            }
+            Sns_fwd = Sns_fwd * fast_powi(fmax(1e-300, conc[128 * gid(0) + lid(0) + work_size * 128 * spec_inner]), nu_fwd);
+          }
+          jac_updater = (kr_i * Sns_rev + -1.0 * kf_i * Sns_fwd) * ci * nu_k;
+          for (int spec_j = 0; spec_j <= 51; ++spec_j)
+            jac[128 * gid(0) + lid(0) + work_size * 128 * (spec_k + 2) + work_size * 128 * 54 * (2 + spec_j)] = jac[128 * gid(0) + lid(0) + work_size * 128 * (spec_k + 2) + work_size * 128 * 54 * (2 + spec_j)] + jac_updater;
+        }
+      }
+  }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dci_thd_dnj(__global double const *__restrict__ rop_fwd, __global double const *__restrict__ rop_rev, __global double *__restrict__ jac)
+{
+  double dci;
+  int i_0;
+  int i_1;
+  int i_2;
+  int nu_k;
+  double ropi;
+  int rxn_off;
+  int rxn_off_next;
+  int spec_j;
+  int spec_k;
+  int thd_off;
+  int thd_off_next;
+
+  for (int i = 0; i <= 11; ++i)
+  {
+    i_0 = thd_only_map[i];
+    thd_off_next = thd_offset[i_0 + 1];
+    thd_off = thd_offset[i_0];
+    i_1 = thd_map[i_0];
+    ropi = rop_fwd[128 * gid(0) + lid(0) + work_size * 128 * i_1];
+    rxn_off_next = net_reac_to_spec_offsets[i_1 + 1];
+    rxn_off = net_reac_to_spec_offsets[i_1];
+    i_2 = rev_mask[i_1];
+    if (rev_mask[i_1] >= 0)
+      ropi = ropi + -1.0 * rop_rev[128 * gid(0) + lid(0) + work_size * 128 * i_2];
+    for (int spec_j_ind = thd_off; spec_j_ind <= -1 + thd_off_next; ++spec_j_ind)
+      if (-1 + -1 * rxn_off + rxn_off_next >= 0)
+      {
+        spec_j = thd_spec[spec_j_ind];
+        if (spec_j != 52)
+        {
+          dci = 0.0;
+          if (thd_type[i_0] == 2)
+            dci = 1.0;
+          if (thd_type[i_0] == 1)
+            dci = thd_eff[spec_j_ind] + -1.0;
+          for (int spec_k_ind = rxn_off; spec_k_ind <= -1 + rxn_off_next; ++spec_k_ind)
+            if (rxn_to_spec[spec_k_ind] != 52)
+            {
+              spec_k = rxn_to_spec[spec_k_ind];
+              nu_k = reac_to_spec_nu[2 * spec_k_ind] + -1 * reac_to_spec_nu[1 + 2 * spec_k_ind];
+              jac[128 * gid(0) + lid(0) + work_size * 128 * (spec_k + 2) + work_size * 128 * 54 * (spec_j + 2)] = jac[128 * gid(0) + lid(0) + work_size * 128 * (spec_k + 2) + work_size * 128 * 54 * (spec_j + 2)] + nu_k * dci * ropi;
+            }
+        }
+      }
+  }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dci_thd_dnj_ns(__global double const *__restrict__ rop_fwd, __global double const *__restrict__ rop_rev, __global double *__restrict__ jac)
+{
+  double dci;
+  int i_1;
+  int i_2;
+  double ns_thd_eff;
+  int nu_k;
+  double ropi;
+  int rxn_off;
+  int rxn_off_next;
+  int spec_k;
+
+  {
+    int const i = 0;
+
+    ns_thd_eff = thd_eff[thd_offset[4] + -1];
+    i_1 = thd_map[3];
+    ropi = rop_fwd[128 * gid(0) + lid(0) + work_size * 128 * i_1];
+    rxn_off_next = net_reac_to_spec_offsets[i_1 + 1];
+    rxn_off = net_reac_to_spec_offsets[i_1];
+    i_2 = rev_mask[i_1];
+    if (rev_mask[i_1] >= 0)
+      ropi = ropi + -1.0 * rop_rev[128 * gid(0) + lid(0) + work_size * 128 * i_2];
+    dci = 0.0;
+    if (thd_type[3] == 2)
+      dci = -1.0;
+    if (thd_type[3] == 1)
+      dci = 1.0 + -1.0 * ns_thd_eff;
+    for (int spec_k_ind = rxn_off; spec_k_ind <= -1 + rxn_off_next; ++spec_k_ind)
+    {
+      spec_k = rxn_to_spec[spec_k_ind];
+      nu_k = reac_to_spec_nu[2 * spec_k_ind] + -1 * reac_to_spec_nu[1 + 2 * spec_k_ind];
+      if (spec_k != 52)
+        for (int spec_j = 0; spec_j <= 51; ++spec_j)
+          jac[128 * gid(0) + lid(0) + work_size * 128 * (spec_k + 2) + work_size * 128 * 54 * (2 + spec_j)] = jac[128 * gid(0) + lid(0) + work_size * 128 * (spec_k + 2) + work_size * 128 * 54 * (2 + spec_j)] + nu_k * dci * ropi;
+    }
+  }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dci_lind_dnj(__global double const *__restrict__ rop_fwd, __global double const *__restrict__ rop_rev, __global double const *__restrict__ Pr, __global double const *__restrict__ pres_mod, __global double const *__restrict__ kf, __global double const *__restrict__ kf_fall, __global double const *__restrict__ Fi, __global double *__restrict__ jac)
+{
+  double Fi_fac;
+  double dFi;
+  double dci;
+  int i_0;
+  int i_1;
+  int i_2;
+  int i_3;
+  double k0;
+  double kinf;
+  int nu_k;
+  double ropi;
+  int rxn_off;
+  int rxn_off_next;
+  int spec_j;
+  int spec_k;
+  int thd_off;
+  int thd_off_next;
+
+  for (int i = 0; i <= 2; ++i)
+  {
+    i_0 = lind_map[i];
+    if (fall_type[i_0])
+      kinf = kf_fall[128 * gid(0) + lid(0) + work_size * 128 * i_0];
+    if (!fall_type[i_0])
+      k0 = kf_fall[128 * gid(0) + lid(0) + work_size * 128 * i_0];
+    i_2 = fall_map[i_0];
+    ropi = rop_fwd[128 * gid(0) + lid(0) + work_size * 128 * i_2];
+    if (!fall_type[i_0])
+      kinf = kf[128 * gid(0) + lid(0) + work_size * 128 * i_2];
+    if (fall_type[i_0])
+      k0 = kf[128 * gid(0) + lid(0) + work_size * 128 * i_2];
+    rxn_off_next = net_reac_to_spec_offsets[i_2 + 1];
+    rxn_off = net_reac_to_spec_offsets[i_2];
+    i_3 = rev_mask[i_2];
+    if (rev_mask[i_2] >= 0)
+      ropi = ropi + -1.0 * rop_rev[128 * gid(0) + lid(0) + work_size * 128 * i_3];
+    i_1 = fall_to_thd_map[i_0];
+    thd_off_next = thd_offset[i_1 + 1];
+    thd_off = thd_offset[i_1];
+    dFi = 0.0;
+    Fi_fac = dFi;
+    if (!fall_type[i_0])
+      Fi_fac = Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] * Fi_fac + 1.0;
+    dFi = k0 * (Fi[128 * gid(0) + lid(0) + work_size * 128 * i_0] * Fi_fac + -1.0 * pres_mod[128 * gid(0) + lid(0) + work_size * 128 * i_1]) / (kinf * (Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] + 1.0));
+    for (int spec_j_ind = thd_off; spec_j_ind <= -1 + thd_off_next; ++spec_j_ind)
+      if (-1 + -1 * rxn_off + rxn_off_next >= 0)
+      {
+        spec_j = thd_spec[spec_j_ind];
+        if (spec_j != 52)
+        {
+          dci = 0.0;
+          if (thd_type[i_1] == 2)
+            dci = 1.0;
+          if (thd_type[i_1] == 1)
+            dci = thd_eff[spec_j_ind] + -1.0;
+          for (int spec_k_ind = rxn_off; spec_k_ind <= -1 + rxn_off_next; ++spec_k_ind)
+            if (rxn_to_spec[spec_k_ind] != 52)
+            {
+              spec_k = rxn_to_spec[spec_k_ind];
+              nu_k = reac_to_spec_nu[2 * spec_k_ind] + -1 * reac_to_spec_nu[1 + 2 * spec_k_ind];
+              jac[128 * gid(0) + lid(0) + work_size * 128 * (spec_k + 2) + work_size * 128 * 54 * (spec_j + 2)] = jac[128 * gid(0) + lid(0) + work_size * 128 * (spec_k + 2) + work_size * 128 * 54 * (spec_j + 2)] + nu_k * dci * ropi * dFi;
+            }
+        }
+      }
+  }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dci_troe_dnj(__global double const *__restrict__ rop_fwd, __global double const *__restrict__ rop_rev, __global double const *__restrict__ Pr, __global double const *__restrict__ pres_mod, __global double const *__restrict__ kf, __global double const *__restrict__ kf_fall, __global double const *__restrict__ Fi, __global double const *__restrict__ Atroe, __global double const *__restrict__ Btroe, __global double const *__restrict__ Fcent, __global double *__restrict__ jac)
+{
+  double Fi_fac;
+  double dFi;
+  double dci;
+  int i_0;
+  int i_1;
+  int i_2;
+  int i_3;
+  double k0;
+  double kinf;
+  int nu_k;
+  double ropi;
+  int rxn_off;
+  int rxn_off_next;
+  int spec_j;
+  int spec_k;
+  int thd_off;
+  int thd_off_next;
+
+  for (int i = 0; i <= 25; ++i)
+  {
+    i_0 = troe_map[i];
+    if (fall_type[i_0])
+      kinf = kf_fall[128 * gid(0) + lid(0) + work_size * 128 * i_0];
+    if (!fall_type[i_0])
+      k0 = kf_fall[128 * gid(0) + lid(0) + work_size * 128 * i_0];
+    i_2 = fall_map[i_0];
+    ropi = rop_fwd[128 * gid(0) + lid(0) + work_size * 128 * i_2];
+    if (!fall_type[i_0])
+      kinf = kf[128 * gid(0) + lid(0) + work_size * 128 * i_2];
+    if (fall_type[i_0])
+      k0 = kf[128 * gid(0) + lid(0) + work_size * 128 * i_2];
+    rxn_off_next = net_reac_to_spec_offsets[i_2 + 1];
+    rxn_off = net_reac_to_spec_offsets[i_2];
+    i_3 = rev_mask[i_2];
+    if (rev_mask[i_2] >= 0)
+      ropi = ropi + -1.0 * rop_rev[128 * gid(0) + lid(0) + work_size * 128 * i_3];
+    i_1 = fall_to_thd_map[i_0];
+    thd_off_next = thd_offset[i_1 + 1];
+    thd_off = thd_offset[i_1];
+    dFi = Atroe[128 * gid(0) + lid(0) + work_size * 128 * i] * Atroe[128 * gid(0) + lid(0) + work_size * 128 * i] + Btroe[128 * gid(0) + lid(0) + work_size * 128 * i] * Btroe[128 * gid(0) + lid(0) + work_size * 128 * i];
+    dFi = -2.0 * Atroe[128 * gid(0) + lid(0) + work_size * 128 * i] * Btroe[128 * gid(0) + lid(0) + work_size * 128 * i] * (0.14 * Atroe[128 * gid(0) + lid(0) + work_size * 128 * i] + Btroe[128 * gid(0) + lid(0) + work_size * 128 * i]) * log(fmax(1e-300, Fcent[128 * gid(0) + lid(0) + work_size * 128 * i])) / (fmax(1e-300, Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0]) * dFi * dFi * 2.302585092994046);
+    Fi_fac = dFi;
+    if (!fall_type[i_0])
+      Fi_fac = Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] * Fi_fac + 1.0;
+    dFi = k0 * (Fi[128 * gid(0) + lid(0) + work_size * 128 * i_0] * Fi_fac + -1.0 * pres_mod[128 * gid(0) + lid(0) + work_size * 128 * i_1]) / (kinf * (Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] + 1.0));
+    for (int spec_j_ind = thd_off; spec_j_ind <= -1 + thd_off_next; ++spec_j_ind)
+      if (-1 + -1 * rxn_off + rxn_off_next >= 0)
+      {
+        spec_j = thd_spec[spec_j_ind];
+        if (spec_j != 52)
+        {
+          dci = 0.0;
+          if (thd_type[i_1] == 2)
+            dci = 1.0;
+          if (thd_type[i_1] == 1)
+            dci = thd_eff[spec_j_ind] + -1.0;
+          for (int spec_k_ind = rxn_off; spec_k_ind <= -1 + rxn_off_next; ++spec_k_ind)
+            if (rxn_to_spec[spec_k_ind] != 52)
+            {
+              spec_k = rxn_to_spec[spec_k_ind];
+              nu_k = reac_to_spec_nu[2 * spec_k_ind] + -1 * reac_to_spec_nu[1 + 2 * spec_k_ind];
+              jac[128 * gid(0) + lid(0) + work_size * 128 * (spec_k + 2) + work_size * 128 * 54 * (spec_j + 2)] = jac[128 * gid(0) + lid(0) + work_size * 128 * (spec_k + 2) + work_size * 128 * 54 * (spec_j + 2)] + nu_k * dci * ropi * dFi;
+            }
+        }
+      }
+  }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) cp_total(__global double const *__restrict__ cp, __global double const *__restrict__ conc, __global double *__restrict__ cp_tot)
+{
+  double spec_tot;
+
+  spec_tot = 0.0;
+  cp_tot[128 * gid(0) + lid(0)] = 0.0;
+  for (int i = 0; i <= 52; ++i)
+    spec_tot = spec_tot + cp[128 * gid(0) + lid(0) + work_size * 128 * i] * conc[128 * gid(0) + lid(0) + work_size * 128 * i];
+  cp_tot[128 * gid(0) + lid(0)] = cp_tot[128 * gid(0) + lid(0)] + spec_tot;
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) eval_dcp(__global double const *__restrict__ phi, __global double *__restrict__ dcp)
+{
+  double T;
+
+  T = fmin(10000.0, fmax(100.0, phi[128 * gid(0) + lid(0)]));
+  for (int k = 0; k <= 52; ++k)
+  {
+    if (T < T_mid[k])
+      dcp[128 * gid(0) + lid(0) + work_size * 128 * k] = 8314.4621 * (T * (T * (4.0 * T * a_lo[212 + k] + 3.0 * a_lo[159 + k]) + 2.0 * a_lo[106 + k]) + a_lo[53 + k]);
+    if (!(T < T_mid[k]))
+      dcp[128 * gid(0) + lid(0) + work_size * 128 * k] = 8314.4621 * (T * (T * (4.0 * T * a_hi[212 + k] + 3.0 * a_hi[159 + k]) + 2.0 * a_hi[106 + k]) + a_hi[53 + k]);
+  }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) eval_db(__global double const *__restrict__ phi, __global double *__restrict__ db)
+{
+  double T;
+  double Tinv;
+
+  Tinv = 1.0 / fmin(10000.0, fmax(100.0, phi[128 * gid(0) + lid(0)]));
+  T = fmin(10000.0, fmax(100.0, phi[128 * gid(0) + lid(0)]));
+  for (int k = 0; k <= 52; ++k)
+  {
+    if (T < T_mid[k])
+      db[128 * gid(0) + lid(0) + work_size * 128 * k] = T * (T * (T * a_lo[212 + k] / 5.0 + a_lo[159 + k] / 4.0) + a_lo[106 + k] / 3.0) + a_lo[53 + k] / 2.0 + Tinv * (a_lo[k] + -1.0 + a_lo[265 + k] * Tinv);
+    if (!(T < T_mid[k]))
+      db[128 * gid(0) + lid(0) + work_size * 128 * k] = T * (T * (T * a_hi[212 + k] / 5.0 + a_hi[159 + k] / 4.0) + a_hi[106 + k] / 3.0) + a_hi[53 + k] / 2.0 + Tinv * (a_hi[k] + -1.0 + a_hi[265 + k] * Tinv);
+  }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dTdot_dnj(__global double const *__restrict__ cp, __global double const *__restrict__ h, __global double const *__restrict__ cp_tot, __global double const *__restrict__ phi, __global double const *__restrict__ dphi, __global double *__restrict__ jac)
+{
+  double sum;
+
+  for (int i = 0; i <= 51; ++i)
+  {
+    sum = 0.0;
+    for (int i_spec_k = 0; i_spec_k <= 50; ++i_spec_k)
+      sum = sum + (h[128 * gid(0) + lid(0) + work_size * 128 * net_nonzero_spec_no_ns[i_spec_k]] + -1.0 * h[128 * gid(0) + lid(0) + work_size * 128 * 52] * mw_factor[net_nonzero_spec_no_ns[i_spec_k]]) * jac[128 * gid(0) + lid(0) + work_size * 128 * (net_nonzero_spec_no_ns[i_spec_k] + 2) + work_size * 128 * 54 * (2 + i)];
+    jac[128 * gid(0) + lid(0) + work_size * 128 * 54 * (2 + i)] = -1.0 * (sum + dphi[128 * gid(0) + lid(0)] * (cp[128 * gid(0) + lid(0) + work_size * 128 * i] + -1.0 * cp[128 * gid(0) + lid(0) + work_size * 128 * 52])) / (phi[128 * gid(0) + lid(0) + work_size * 128] * cp_tot[128 * gid(0) + lid(0)]);
+  }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dVdot_dnj(__global double const *__restrict__ phi, __global double const *__restrict__ P_arr, __global double *__restrict__ jac)
+{
+  double T_inv;
+  double T_val;
+  double sum;
+
+  T_val = phi[128 * gid(0) + lid(0)];
+  T_inv = 1.0 / phi[128 * gid(0) + lid(0)];
+  for (int i = 0; i <= 51; ++i)
+  {
+    sum = 0.0;
+    for (int i_spec_k = 0; i_spec_k <= 50; ++i_spec_k)
+      sum = sum + (1.0 + -1.0 * mw_factor[net_nonzero_spec_no_ns[i_spec_k]]) * jac[128 * gid(0) + lid(0) + work_size * 128 * (net_nonzero_spec_no_ns[i_spec_k] + 2) + work_size * 128 * 54 * (2 + i)];
+    jac[128 * gid(0) + lid(0) + work_size * 128 + work_size * 128 * 54 * (2 + i)] = jac[128 * gid(0) + lid(0) + work_size * 128 + work_size * 128 * 54 * (2 + i)] + T_val * 8314.4621 * sum / P_arr[128 * gid(0) + lid(0)] + phi[128 * gid(0) + lid(0) + work_size * 128] * jac[128 * gid(0) + lid(0) + work_size * 128 * 54 * (2 + i)] * T_inv;
+  }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dRopi_dT(__global double const *__restrict__ phi, __global double const *__restrict__ pres_mod, __global double const *__restrict__ rop_fwd, __global double const *__restrict__ rop_rev, __global double const *__restrict__ db, __global double *__restrict__ jac)
+{
+  double Tinv;
+  double ci;
+  double dBk_sum;
+  double dRopidT;
+  double dkf;
+  int i_0;
+  int i_1;
+  int offset;
+  int offset_next;
+
+  Tinv = 1.0 / phi[128 * gid(0) + lid(0)];
+  for (int i = 0; i <= 324; ++i)
+  {
+    offset_next = net_reac_to_spec_offsets[1 + i];
+    offset = net_reac_to_spec_offsets[i];
+    i_1 = thd_mask[i];
+    i_0 = rev_mask[i];
+    dkf = (simple_beta[i] + simple_Ta[i] * Tinv) * Tinv;
+    dRopidT = rop_fwd[128 * gid(0) + lid(0) + work_size * 128 * i] * dkf;
+    if (rev_mask[i] >= 0)
+      dBk_sum = 0.0;
+    ci = 1.0;
+    if (thd_mask[i] >= 0)
+      ci = pres_mod[128 * gid(0) + lid(0) + work_size * 128 * i_1];
+    if (rev_mask[i] >= 0)
+    {
+      for (int net_ind = offset; net_ind <= -1 + offset_next; ++net_ind)
+        dBk_sum = dBk_sum + (reac_to_spec_nu[2 * net_ind] + -1.0 * reac_to_spec_nu[1 + 2 * net_ind]) * db[128 * gid(0) + lid(0) + work_size * 128 * rxn_to_spec[net_ind]];
+      dRopidT = dRopidT + -1.0 * rop_rev[128 * gid(0) + lid(0) + work_size * 128 * i_0] * (dkf + -1.0 * dBk_sum);
+    }
+    dRopidT = dRopidT * ci * phi[128 * gid(0) + lid(0) + work_size * 128];
+    for (int k_ind = offset; k_ind <= -1 + offset_next; ++k_ind)
+      if (rxn_to_spec[k_ind] != 52)
+        jac[128 * gid(0) + lid(0) + work_size * 128 * (rxn_to_spec[k_ind] + 2)] = jac[128 * gid(0) + lid(0) + work_size * 128 * (rxn_to_spec[k_ind] + 2)] + (reac_to_spec_nu[2 * k_ind] + -1.0 * reac_to_spec_nu[1 + 2 * k_ind]) * dRopidT;
+  }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dRopi_dT_ns(__global double const *__restrict__ phi, __global double const *__restrict__ pres_mod, __global double const *__restrict__ kf, __global double const *__restrict__ kr, __global double const *__restrict__ P_arr, __global double const *__restrict__ conc, __global double *__restrict__ jac)
+{
+  double Sns_fwd;
+  double Sns_rev;
+  double ci;
+  double dRopidT;
+  int i_0;
+  int i_1;
+  int i_2;
+  double kr_i;
+  int net_spec;
+  int nu_fwd;
+  int nu_rev;
+  int offset;
+  int offset_next;
+
+  for (int i = 0; i <= 27; ++i)
+  {
+    kr_i = 0.0;
+    i_0 = rxn_has_ns[i];
+    offset_next = net_reac_to_spec_offsets[i_0 + 1];
+    offset = net_reac_to_spec_offsets[i_0];
+    i_2 = thd_mask[i_0];
+    i_1 = rev_mask[i_0];
+    if (rev_mask[i_0] >= 0)
+      kr_i = kr[128 * gid(0) + lid(0) + work_size * 128 * i_1];
+    ci = 1.0;
+    if (thd_mask[i_0] >= 0)
+      ci = pres_mod[128 * gid(0) + lid(0) + work_size * 128 * i_2];
+    Sns_rev = reac_to_spec_nu[offset_next + offset_next + -2];
+    Sns_fwd = reac_to_spec_nu[offset_next + offset_next + -2 + 1];
+    for (int net_ind = offset; net_ind <= -1 + offset_next; ++net_ind)
+    {
+      nu_rev = reac_to_spec_nu[2 * net_ind];
+      nu_fwd = reac_to_spec_nu[1 + 2 * net_ind];
+      net_spec = rxn_to_spec[net_ind];
+      if (net_spec == 52)
+      {
+        nu_rev = nu_rev + -1;
+        nu_fwd = nu_fwd + -1;
+      }
+      Sns_rev = Sns_rev * fast_powi(fmax(1e-300, conc[128 * gid(0) + lid(0) + work_size * 128 * net_spec]), nu_rev);
+      Sns_fwd = Sns_fwd * fast_powi(fmax(1e-300, conc[128 * gid(0) + lid(0) + work_size * 128 * net_spec]), nu_fwd);
+    }
+    dRopidT = (Sns_rev * kr_i + -1.0 * Sns_fwd * kf[128 * gid(0) + lid(0) + work_size * 128 * i_0]) * phi[128 * gid(0) + lid(0) + work_size * 128] * ci * P_arr[128 * gid(0) + lid(0)] / (8314.4621 * phi[128 * gid(0) + lid(0)] * phi[128 * gid(0) + lid(0)]);
+    for (int k_ind = offset; k_ind <= -1 + offset_next; ++k_ind)
+      if (rxn_to_spec[k_ind] != 52)
+        jac[128 * gid(0) + lid(0) + work_size * 128 * (rxn_to_spec[k_ind] + 2)] = jac[128 * gid(0) + lid(0) + work_size * 128 * (rxn_to_spec[k_ind] + 2)] + (reac_to_spec_nu[2 * k_ind] + -1.0 * reac_to_spec_nu[1 + 2 * k_ind]) * dRopidT;
+  }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dci_thd_dT(__global double const *__restrict__ rop_fwd, __global double const *__restrict__ rop_rev, __global double const *__restrict__ phi, __global double const *__restrict__ P_arr, __global double *__restrict__ jac)
+{
+  double Tinv;
+  double dci_thd_dT_fac;
+  int i_0;
+  int i_1;
+  int i_2;
+  double mod;
+  int offset;
+  int offset_next;
+  double rop_net;
+
+  Tinv = 1.0 / phi[128 * gid(0) + lid(0)];
+  for (int i = 0; i <= 11; ++i)
+  {
+    mod = 1.0;
+    i_0 = thd_only_map[i];
+    if (thd_type[i_0] == 2)
+      mod = thd_spec[thd_offset[i_0 + 1] + -1] == 52;
+    if (thd_type[i_0] == 1 && thd_spec[thd_offset[i_0 + 1] + -1] == 52)
+      mod = thd_eff[thd_offset[i_0 + 1] + -1];
+    i_1 = thd_map[i_0];
+    rop_net = rop_fwd[128 * gid(0) + lid(0) + work_size * 128 * i_1];
+    offset_next = net_reac_to_spec_offsets[i_1 + 1];
+    offset = net_reac_to_spec_offsets[i_1];
+    i_2 = rev_mask[i_1];
+    if (i_2 >= 0)
+      rop_net = rop_net + -1.0 * rop_rev[128 * gid(0) + lid(0) + work_size * 128 * i_2];
+    dci_thd_dT_fac = -1.0 * P_arr[128 * gid(0) + lid(0)] * mod * 0.00012027236253804078 * Tinv * Tinv * phi[128 * gid(0) + lid(0) + work_size * 128] * rop_net;
+    for (int k_ind = offset; k_ind <= -1 + offset_next; ++k_ind)
+      if (rxn_to_spec[k_ind] != 52)
+        jac[128 * gid(0) + lid(0) + work_size * 128 * (rxn_to_spec[k_ind] + 2)] = jac[128 * gid(0) + lid(0) + work_size * 128 * (rxn_to_spec[k_ind] + 2)] + (reac_to_spec_nu[2 * k_ind] + -1.0 * reac_to_spec_nu[1 + 2 * k_ind]) * dci_thd_dT_fac;
+  }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dci_lind_dT(__global double const *__restrict__ rop_fwd, __global double const *__restrict__ rop_rev, __global double const *__restrict__ phi, __global double const *__restrict__ P_arr, __global double const *__restrict__ pres_mod, __global double const *__restrict__ Fi, __global double const *__restrict__ Pr, __global double const *__restrict__ kf, __global double const *__restrict__ kf_fall, __global double *__restrict__ jac)
+{
+  double Ta_0;
+  double Ta_inf;
+  double Tinv;
+  double beta_0;
+  double beta_inf;
+  int dFi;
+  double dci_fall_dT;
+  double dci_thd_dT_fac;
+  int i_0;
+  int i_1;
+  int i_2;
+  int i_3;
+  int i_4;
+  double kf_0;
+  double kf_inf;
+  double mod;
+  int offset;
+  int offset_next;
+  double pmod;
+  double rop_net;
+  double theta_Pr;
+  double theta_no_Pr;
+
+  Tinv = 1.0 / phi[128 * gid(0) + lid(0)];
+  for (int i = 0; i <= 2; ++i)
+  {
+    mod = 1.0;
+    i_0 = lind_map[i];
+    if (fall_type[i_0])
+      kf_inf = kf_fall[128 * gid(0) + lid(0) + work_size * 128 * i_0];
+    if (!fall_type[i_0])
+      kf_0 = kf_fall[128 * gid(0) + lid(0) + work_size * 128 * i_0];
+    i_1 = fall_to_thd_map[i_0];
+    if (thd_type[i_1] == 2)
+      mod = thd_spec[thd_offset[i_1 + 1] + -1] == 52;
+    if (thd_type[i_1] == 1 && thd_spec[thd_offset[i_1 + 1] + -1] == 52)
+      mod = thd_eff[thd_offset[i_1 + 1] + -1];
+    pmod = pres_mod[128 * gid(0) + lid(0) + work_size * 128 * i_1];
+    i_2 = thd_map[i_1];
+    rop_net = rop_fwd[128 * gid(0) + lid(0) + work_size * 128 * i_2];
+    if (!fall_type[i_0])
+      kf_inf = kf[128 * gid(0) + lid(0) + work_size * 128 * i_2];
+    if (fall_type[i_0])
+      kf_0 = kf[128 * gid(0) + lid(0) + work_size * 128 * i_2];
+    offset_next = net_reac_to_spec_offsets[i_2 + 1];
+    offset = net_reac_to_spec_offsets[i_2];
+    i_4 = rev_mask[i_2];
+    if (i_4 >= 0)
+      rop_net = rop_net + -1.0 * rop_rev[128 * gid(0) + lid(0) + work_size * 128 * i_4];
+    dci_thd_dT_fac = -1.0 * P_arr[128 * gid(0) + lid(0)] * mod * 0.00012027236253804078 * Tinv * Tinv;
+    theta_no_Pr = dci_thd_dT_fac * kf_0 / kf_inf;
+    i_3 = simple_mask[i_2];
+    dFi = 0;
+    if (!fall_type[i_0])
+      beta_inf = simple_beta[i_3];
+    if (fall_type[i_0])
+      beta_inf = fall_beta[i_0];
+    if (!fall_type[i_0])
+      beta_0 = fall_beta[i_0];
+    if (fall_type[i_0])
+      beta_0 = simple_beta[i_3];
+    if (!fall_type[i_0])
+      Ta_inf = simple_Ta[i_3];
+    if (fall_type[i_0])
+      Ta_inf = fall_Ta[i_0];
+    if (!fall_type[i_0])
+      Ta_0 = fall_Ta[i_0];
+    if (fall_type[i_0])
+      Ta_0 = simple_Ta[i_3];
+    theta_Pr = Tinv * (beta_0 + -1.0 * beta_inf + (Ta_0 + -1.0 * Ta_inf) * Tinv);
+    dci_fall_dT = pmod * (-1.0 * (Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] * theta_Pr + theta_no_Pr) / (Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] + 1.0) + dFi);
+    if (!fall_type[i_0])
+      dci_fall_dT = dci_fall_dT + theta_Pr * pmod + Fi[128 * gid(0) + lid(0) + work_size * 128 * i_0] * theta_no_Pr / (Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] + 1.0);
+    dci_fall_dT = dci_fall_dT * phi[128 * gid(0) + lid(0) + work_size * 128] * rop_net;
+    for (int k_ind = offset; k_ind <= -1 + offset_next; ++k_ind)
+      if (rxn_to_spec[k_ind] != 52)
+        jac[128 * gid(0) + lid(0) + work_size * 128 * (rxn_to_spec[k_ind] + 2)] = jac[128 * gid(0) + lid(0) + work_size * 128 * (rxn_to_spec[k_ind] + 2)] + (reac_to_spec_nu[2 * k_ind] + -1.0 * reac_to_spec_nu[1 + 2 * k_ind]) * dci_fall_dT;
+  }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dci_troe_dT(__global double const *__restrict__ rop_fwd, __global double const *__restrict__ rop_rev, __global double const *__restrict__ phi, __global double const *__restrict__ P_arr, __global double const *__restrict__ pres_mod, __global double const *__restrict__ Fi, __global double const *__restrict__ Pr, __global double const *__restrict__ kf, __global double const *__restrict__ kf_fall, __global double const *__restrict__ Atroe, __global double const *__restrict__ Btroe, __global double const *__restrict__ Fcent, __global double *__restrict__ jac)
+{
+  double Ta_0;
+  double Ta_inf;
+  double Tinv;
+  double Tval;
+  double absq;
+  double absqsq;
+  double beta_0;
+  double beta_inf;
+  double dFcent;
+  double dFi;
+  double dci_fall_dT;
+  double dci_thd_dT_fac;
+  int i_0;
+  int i_1;
+  int i_2;
+  int i_3;
+  int i_4;
+  double kf_0;
+  double kf_inf;
+  double logFcent;
+  double mod;
+  int offset;
+  int offset_next;
+  double pmod;
+  double rop_net;
+  double theta_Pr;
+  double theta_no_Pr;
+
+  Tval = phi[128 * gid(0) + lid(0)];
+  Tinv = 1.0 / phi[128 * gid(0) + lid(0)];
+  for (int i = 0; i <= 25; ++i)
+  {
+    mod = 1.0;
+    logFcent = log(fmax(1e-300, Fcent[128 * gid(0) + lid(0) + work_size * 128 * i]));
+    dFcent = -1.0 * troe_a[i] * troe_T1[i] * exp(fmin(690.775527898, -1.0 * Tval * troe_T1[i])) + (troe_a[i] + -1.0) * troe_T3[i] * exp(fmin(690.775527898, -1.0 * Tval * troe_T3[i])) + troe_T2[i] * Tinv * Tinv * exp(fmin(690.775527898, -1.0 * troe_T2[i] * Tinv));
+    i_0 = troe_map[i];
+    if (fall_type[i_0])
+      kf_inf = kf_fall[128 * gid(0) + lid(0) + work_size * 128 * i_0];
+    if (!fall_type[i_0])
+      kf_0 = kf_fall[128 * gid(0) + lid(0) + work_size * 128 * i_0];
+    i_1 = fall_to_thd_map[i_0];
+    if (thd_type[i_1] == 2)
+      mod = thd_spec[thd_offset[i_1 + 1] + -1] == 52;
+    if (thd_type[i_1] == 1 && thd_spec[thd_offset[i_1 + 1] + -1] == 52)
+      mod = thd_eff[thd_offset[i_1 + 1] + -1];
+    pmod = pres_mod[128 * gid(0) + lid(0) + work_size * 128 * i_1];
+    i_2 = thd_map[i_1];
+    rop_net = rop_fwd[128 * gid(0) + lid(0) + work_size * 128 * i_2];
+    if (!fall_type[i_0])
+      kf_inf = kf[128 * gid(0) + lid(0) + work_size * 128 * i_2];
+    if (fall_type[i_0])
+      kf_0 = kf[128 * gid(0) + lid(0) + work_size * 128 * i_2];
+    offset_next = net_reac_to_spec_offsets[i_2 + 1];
+    offset = net_reac_to_spec_offsets[i_2];
+    i_4 = simple_mask[i_2];
+    i_3 = rev_mask[i_2];
+    if (i_3 >= 0)
+      rop_net = rop_net + -1.0 * rop_rev[128 * gid(0) + lid(0) + work_size * 128 * i_3];
+    dci_thd_dT_fac = -1.0 * P_arr[128 * gid(0) + lid(0)] * mod * 0.00012027236253804078 * Tinv * Tinv;
+    theta_no_Pr = dci_thd_dT_fac * kf_0 / kf_inf;
+    if (!fall_type[i_0])
+      beta_inf = simple_beta[i_4];
+    if (fall_type[i_0])
+      beta_inf = fall_beta[i_0];
+    if (!fall_type[i_0])
+      beta_0 = fall_beta[i_0];
+    if (fall_type[i_0])
+      beta_0 = simple_beta[i_4];
+    absq = Atroe[128 * gid(0) + lid(0) + work_size * 128 * i] * Atroe[128 * gid(0) + lid(0) + work_size * 128 * i] + Btroe[128 * gid(0) + lid(0) + work_size * 128 * i] * Btroe[128 * gid(0) + lid(0) + work_size * 128 * i];
+    absqsq = absq * absq;
+    if (!fall_type[i_0])
+      Ta_inf = simple_Ta[i_4];
+    if (fall_type[i_0])
+      Ta_inf = fall_Ta[i_0];
+    if (!fall_type[i_0])
+      Ta_0 = fall_Ta[i_0];
+    if (fall_type[i_0])
+      Ta_0 = simple_Ta[i_4];
+    theta_Pr = Tinv * (beta_0 + -1.0 * beta_inf + (Ta_0 + -1.0 * Ta_inf) * Tinv);
+    dFi = -1.0 * Btroe[128 * gid(0) + lid(0) + work_size * 128 * i] * (2.0 * Atroe[128 * gid(0) + lid(0) + work_size * 128 * i] * Fcent[128 * gid(0) + lid(0) + work_size * 128 * i] * (0.14 * Atroe[128 * gid(0) + lid(0) + work_size * 128 * i] + Btroe[128 * gid(0) + lid(0) + work_size * 128 * i]) * (Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] * theta_Pr + theta_no_Pr) * logFcent + Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] * dFcent * (2.0 * Atroe[128 * gid(0) + lid(0) + work_size * 128 * i] * (1.1762 * Atroe[128 * gid(0) + lid(0) + work_size * 128 * i] + -1.0 * 0.67 * Btroe[128 * gid(0) + lid(0) + work_size * 128 * i]) * logFcent + -1.0 * Btroe[128 * gid(0) + lid(0) + work_size * 128 * i] * absq * 2.302585092994046)) / (Fcent[128 * gid(0) + lid(0) + work_size * 128 * i] * fmax(1e-300, Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0]) * absqsq * 2.302585092994046);
+    dci_fall_dT = pmod * (-1.0 * (Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] * theta_Pr + theta_no_Pr) / (Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] + 1.0) + dFi);
+    if (!fall_type[i_0])
+      dci_fall_dT = dci_fall_dT + theta_Pr * pmod + Fi[128 * gid(0) + lid(0) + work_size * 128 * i_0] * theta_no_Pr / (Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] + 1.0);
+    dci_fall_dT = dci_fall_dT * phi[128 * gid(0) + lid(0) + work_size * 128] * rop_net;
+    for (int k_ind = offset; k_ind <= -1 + offset_next; ++k_ind)
+      if (rxn_to_spec[k_ind] != 52)
+        jac[128 * gid(0) + lid(0) + work_size * 128 * (rxn_to_spec[k_ind] + 2)] = jac[128 * gid(0) + lid(0) + work_size * 128 * (rxn_to_spec[k_ind] + 2)] + (reac_to_spec_nu[2 * k_ind] + -1.0 * reac_to_spec_nu[1 + 2 * k_ind]) * dci_fall_dT;
+  }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dTdot_dT(__global double const *__restrict__ cp_tot, __global double const *__restrict__ dphi, __global double const *__restrict__ cp, __global double const *__restrict__ dcp, __global double const *__restrict__ h, __global double const *__restrict__ conc, __global double const *__restrict__ phi, __global double const *__restrict__ wdot, __global double *__restrict__ jac)
+{
+  double Tinv;
+  double Vinv;
+  double dTsum;
+  double rate_sum;
+
+  rate_sum = 0.0;
+  Tinv = 1.0 / phi[128 * gid(0) + lid(0)];
+  dTsum = (cp[128 * gid(0) + lid(0) + work_size * 128 * 52] * Tinv + -1.0 * dcp[128 * gid(0) + lid(0) + work_size * 128 * 52]) * conc[128 * gid(0) + lid(0) + work_size * 128 * 52];
+  Vinv = 1.0 / phi[128 * gid(0) + lid(0) + work_size * 128];
+  for (int i = 0; i <= 51; ++i)
+  {
+    rate_sum = rate_sum + Vinv * jac[128 * gid(0) + lid(0) + work_size * 128 * (2 + i)] * (-1.0 * h[128 * gid(0) + lid(0) + work_size * 128 * i] + h[128 * gid(0) + lid(0) + work_size * 128 * 52] * mw_factor[i]);
+    rate_sum = rate_sum + wdot[128 * gid(0) + lid(0) + work_size * 128 * i] * (-1.0 * cp[128 * gid(0) + lid(0) + work_size * 128 * i] + mw_factor[i] * cp[128 * gid(0) + lid(0) + work_size * 128 * 52]);
+    dTsum = dTsum + (cp[128 * gid(0) + lid(0) + work_size * 128 * 52] * Tinv + -1.0 * dcp[128 * gid(0) + lid(0) + work_size * 128 * i]) * conc[128 * gid(0) + lid(0) + work_size * 128 * i];
+  }
+  jac[128 * gid(0) + lid(0)] = jac[128 * gid(0) + lid(0)] + (dphi[128 * gid(0) + lid(0)] * dTsum + rate_sum) / cp_tot[128 * gid(0) + lid(0)];
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dVdotdT(__global double const *__restrict__ phi, __global double const *__restrict__ P_arr, __global double const *__restrict__ wdot, __global double const *__restrict__ dphi, __global double *__restrict__ jac)
+{
+  double Tinv;
+  double Vinv;
+  double sum;
+
+  Vinv = 1.0 / phi[128 * gid(0) + lid(0) + work_size * 128];
+  Tinv = 1.0 / phi[128 * gid(0) + lid(0)];
+  sum = 0.0;
+  for (int i = 0; i <= 51; ++i)
+    sum = sum + (1.0 + -1.0 * mw_factor[i]) * (Vinv * jac[128 * gid(0) + lid(0) + work_size * 128 * (2 + i)] + Tinv * wdot[128 * gid(0) + lid(0) + work_size * 128 * i]);
+  jac[128 * gid(0) + lid(0) + work_size * 128] = jac[128 * gid(0) + lid(0) + work_size * 128] + phi[128 * gid(0) + lid(0) + work_size * 128] * Tinv * (jac[128 * gid(0) + lid(0)] + -1.0 * Tinv * dphi[128 * gid(0) + lid(0)]);
+  jac[128 * gid(0) + lid(0) + work_size * 128] = jac[128 * gid(0) + lid(0) + work_size * 128] + 8314.4621 * phi[128 * gid(0) + lid(0)] * phi[128 * gid(0) + lid(0) + work_size * 128] * sum / P_arr[128 * gid(0) + lid(0)];
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dRopi_dV(__global double const *__restrict__ phi, __global double const *__restrict__ pres_mod, __global double const *__restrict__ rop_fwd, __global double const *__restrict__ rop_rev, __global double *__restrict__ jac)
+{
+  double dRopi_dE;
+  int i_0;
+  int i_1;
+  int nu_fwd;
+  int nu_rev;
+  int offset;
+  int offset_next;
+
+  for (int i = 0; i <= 324; ++i)
+  {
+    nu_rev = -1;
+    nu_fwd = -1;
+    offset_next = net_reac_to_spec_offsets[1 + i];
+    offset = net_reac_to_spec_offsets[i];
+    i_1 = rev_mask[i];
+    i_0 = thd_mask[i];
+    for (int net_ind = offset; net_ind <= -1 + offset_next; ++net_ind)
+    {
+      nu_rev = nu_rev + reac_to_spec_nu[2 * net_ind];
+      nu_fwd = nu_fwd + reac_to_spec_nu[1 + 2 * net_ind];
+    }
+    dRopi_dE = -1.0 * nu_fwd * rop_fwd[128 * gid(0) + lid(0) + work_size * 128 * i];
+    if (i_1 >= 0)
+      dRopi_dE = dRopi_dE + nu_rev * rop_rev[128 * gid(0) + lid(0) + work_size * 128 * i_1];
+    if (i_0 >= 0)
+      dRopi_dE = dRopi_dE * pres_mod[128 * gid(0) + lid(0) + work_size * 128 * i_0];
+    for (int k_ind = offset; k_ind <= -1 + offset_next; ++k_ind)
+      if (rxn_to_spec[k_ind] != 52)
+        jac[128 * gid(0) + lid(0) + work_size * 128 * (rxn_to_spec[k_ind] + 2) + work_size * 128 * 54] = jac[128 * gid(0) + lid(0) + work_size * 128 * (rxn_to_spec[k_ind] + 2) + work_size * 128 * 54] + (reac_to_spec_nu[2 * k_ind] + -1.0 * reac_to_spec_nu[1 + 2 * k_ind]) * dRopi_dE;
+  }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dRopi_dV_ns(__global double const *__restrict__ phi, __global double const *__restrict__ pres_mod, __global double const *__restrict__ kf, __global double const *__restrict__ kr, __global double const *__restrict__ P_arr, __global double const *__restrict__ conc, __global double *__restrict__ jac)
+{
+  double Sns_fwd;
+  double Sns_rev;
+  double ci;
+  double dRopi_dE;
+  double fac;
+  int i_0;
+  int i_1;
+  int i_2;
+  double kr_i;
+  int net_spec;
+  int nu_fwd;
+  int nu_rev;
+  int offset;
+  int offset_next;
+
+  fac = P_arr[128 * gid(0) + lid(0)] / (8314.4621 * phi[128 * gid(0) + lid(0)]);
+  for (int i = 0; i <= 27; ++i)
+  {
+    kr_i = 0.0;
+    i_0 = rxn_has_ns[i];
+    offset_next = net_reac_to_spec_offsets[i_0 + 1];
+    offset = net_reac_to_spec_offsets[i_0];
+    i_2 = thd_mask[i_0];
+    i_1 = rev_mask[i_0];
+    if (i_1 >= 0)
+      kr_i = kr[128 * gid(0) + lid(0) + work_size * 128 * i_1];
+    ci = 1.0;
+    if (i_2 >= 0)
+      ci = pres_mod[128 * gid(0) + lid(0) + work_size * 128 * i_2];
+    Sns_rev = reac_to_spec_nu[offset_next + offset_next + -2];
+    Sns_fwd = reac_to_spec_nu[offset_next + offset_next + -2 + 1];
+    for (int net_ind = offset; net_ind <= -1 + offset_next; ++net_ind)
+    {
+      nu_rev = reac_to_spec_nu[2 * net_ind];
+      nu_fwd = reac_to_spec_nu[1 + 2 * net_ind];
+      net_spec = rxn_to_spec[net_ind];
+      if (net_spec == 52)
+      {
+        nu_rev = nu_rev + -1;
+        nu_fwd = nu_fwd + -1;
+      }
+      Sns_rev = Sns_rev * fast_powi(fmax(1e-300, conc[128 * gid(0) + lid(0) + work_size * 128 * net_spec]), nu_rev);
+      Sns_fwd = Sns_fwd * fast_powi(fmax(1e-300, conc[128 * gid(0) + lid(0) + work_size * 128 * net_spec]), nu_fwd);
+    }
+    dRopi_dE = (Sns_fwd * kf[128 * gid(0) + lid(0) + work_size * 128 * i_0] + -1.0 * Sns_rev * kr_i) * ci * fac;
+    for (int k_ind = offset; k_ind <= -1 + offset_next; ++k_ind)
+      if (rxn_to_spec[k_ind] != 52)
+        jac[128 * gid(0) + lid(0) + work_size * 128 * (rxn_to_spec[k_ind] + 2) + work_size * 128 * 54] = jac[128 * gid(0) + lid(0) + work_size * 128 * (rxn_to_spec[k_ind] + 2) + work_size * 128 * 54] + (reac_to_spec_nu[2 * k_ind] + -1.0 * reac_to_spec_nu[1 + 2 * k_ind]) * dRopi_dE;
+  }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dci_thd_dE(__global double const *__restrict__ rop_fwd, __global double const *__restrict__ rop_rev, __global double const *__restrict__ pres_mod, __global double const *__restrict__ phi, __global double const *__restrict__ P_arr, __global double *__restrict__ jac)
+{
+  double dci_thd_dE_fac;
+  int i_0;
+  int i_1;
+  int i_2;
+  double mod;
+  int offset;
+  int offset_next;
+  double rop_net;
+  double rt_inv;
+
+  rt_inv = 1.0 / (8314.4621 * phi[128 * gid(0) + lid(0)]);
+  for (int i = 0; i <= 11; ++i)
+  {
+    i_0 = thd_only_map[i];
+    mod = thd_type[i_0] == 1;
+    if (thd_type[i_0] == 2)
+      mod = thd_spec[thd_offset[i_0 + 1] + -1] == 52;
+    if (thd_type[i_0] == 1 && thd_spec[thd_offset[i_0 + 1] + -1] == 52)
+      mod = thd_eff[thd_offset[i_0 + 1] + -1];
+    if (thd_type[i_0] != 3)
+      mod = mod * P_arr[128 * gid(0) + lid(0)] * rt_inv + -1.0 * pres_mod[128 * gid(0) + lid(0) + work_size * 128 * i_0];
+    i_1 = thd_map[i_0];
+    rop_net = rop_fwd[128 * gid(0) + lid(0) + work_size * 128 * i_1];
+    offset_next = net_reac_to_spec_offsets[i_1 + 1];
+    offset = net_reac_to_spec_offsets[i_1];
+    i_2 = rev_mask[i_1];
+    if (i_2 >= 0)
+      rop_net = rop_net + -1.0 * rop_rev[128 * gid(0) + lid(0) + work_size * 128 * i_2];
+    dci_thd_dE_fac = mod * rop_net;
+    for (int k_ind = offset; k_ind <= -1 + offset_next; ++k_ind)
+      if (rxn_to_spec[k_ind] != 52)
+        jac[128 * gid(0) + lid(0) + work_size * 128 * (rxn_to_spec[k_ind] + 2) + work_size * 128 * 54] = jac[128 * gid(0) + lid(0) + work_size * 128 * (rxn_to_spec[k_ind] + 2) + work_size * 128 * 54] + (reac_to_spec_nu[2 * k_ind] + -1.0 * reac_to_spec_nu[1 + 2 * k_ind]) * dci_thd_dE_fac;
+  }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dci_lind_dE(__global double const *__restrict__ rop_fwd, __global double const *__restrict__ rop_rev, __global double const *__restrict__ pres_mod, __global double const *__restrict__ phi, __global double const *__restrict__ P_arr, __global double const *__restrict__ Fi, __global double const *__restrict__ Pr, __global double const *__restrict__ kf, __global double const *__restrict__ kf_fall, __global double *__restrict__ jac)
+{
+  int dFi;
+  double dci_fall_dE;
+  int i_0;
+  int i_1;
+  int i_2;
+  int i_3;
+  double kf_0;
+  double kf_inf;
+  double mod;
+  int not_unity;
+  int offset;
+  int offset_next;
+  double rop_net;
+  double rt_inv;
+
+  rt_inv = 1.0 / (8314.4621 * phi[128 * gid(0) + lid(0)]);
+  for (int i = 0; i <= 2; ++i)
+  {
+    i_0 = lind_map[i];
+    if (fall_type[i_0])
+      kf_inf = kf_fall[128 * gid(0) + lid(0) + work_size * 128 * i_0];
+    if (!fall_type[i_0])
+      kf_0 = kf_fall[128 * gid(0) + lid(0) + work_size * 128 * i_0];
+    i_1 = fall_to_thd_map[i_0];
+    mod = thd_type[i_1] == 1;
+    if (thd_type[i_1] == 2)
+      mod = thd_spec[thd_offset[i_1 + 1] + -1] == 52;
+    if (thd_type[i_1] == 1 && thd_spec[thd_offset[i_1 + 1] + -1] == 52)
+      mod = thd_eff[thd_offset[i_1 + 1] + -1];
+    not_unity = thd_type[i_1] != 3;
+    i_2 = thd_map[i_1];
+    rop_net = rop_fwd[128 * gid(0) + lid(0) + work_size * 128 * i_2];
+    if (!fall_type[i_0])
+      kf_inf = kf[128 * gid(0) + lid(0) + work_size * 128 * i_2];
+    if (fall_type[i_0])
+      kf_0 = kf[128 * gid(0) + lid(0) + work_size * 128 * i_2];
+    mod = mod * P_arr[128 * gid(0) + lid(0)] * rt_inv * kf_0 / kf_inf;
+    offset_next = net_reac_to_spec_offsets[i_2 + 1];
+    offset = net_reac_to_spec_offsets[i_2];
+    i_3 = rev_mask[i_2];
+    if (i_3 >= 0)
+      rop_net = rop_net + -1.0 * rop_rev[128 * gid(0) + lid(0) + work_size * 128 * i_3];
+    dFi = 0;
+    dci_fall_dE = pres_mod[128 * gid(0) + lid(0) + work_size * 128 * i_1] * ((-1.0 * mod + Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] * not_unity) / (Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] + 1.0) + dFi);
+    if (!fall_type[i_0])
+      dci_fall_dE = dci_fall_dE + Fi[128 * gid(0) + lid(0) + work_size * 128 * i_0] * mod / (Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] + 1.0) + -1.0 * not_unity * pres_mod[128 * gid(0) + lid(0) + work_size * 128 * i_1];
+    dci_fall_dE = dci_fall_dE * rop_net;
+    for (int k_ind = offset; k_ind <= -1 + offset_next; ++k_ind)
+      if (rxn_to_spec[k_ind] != 52)
+        jac[128 * gid(0) + lid(0) + work_size * 128 * (rxn_to_spec[k_ind] + 2) + work_size * 128 * 54] = jac[128 * gid(0) + lid(0) + work_size * 128 * (rxn_to_spec[k_ind] + 2) + work_size * 128 * 54] + (reac_to_spec_nu[2 * k_ind] + -1.0 * reac_to_spec_nu[1 + 2 * k_ind]) * dci_fall_dE;
+  }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dci_troe_dE(__global double const *__restrict__ rop_fwd, __global double const *__restrict__ rop_rev, __global double const *__restrict__ pres_mod, __global double const *__restrict__ phi, __global double const *__restrict__ P_arr, __global double const *__restrict__ Fi, __global double const *__restrict__ Pr, __global double const *__restrict__ kf, __global double const *__restrict__ kf_fall, __global double const *__restrict__ Atroe, __global double const *__restrict__ Btroe, __global double const *__restrict__ Fcent, __global double *__restrict__ jac)
+{
+  double absqsq;
+  double dFi;
+  double dci_fall_dE;
+  int i_0;
+  int i_1;
+  int i_2;
+  int i_3;
+  double kf_0;
+  double kf_inf;
+  double mod;
+  int not_unity;
+  int offset;
+  int offset_next;
+  double rop_net;
+  double rt_inv;
+
+  rt_inv = 1.0 / (8314.4621 * phi[128 * gid(0) + lid(0)]);
+  for (int i = 0; i <= 25; ++i)
+  {
+    i_0 = troe_map[i];
+    if (fall_type[i_0])
+      kf_inf = kf_fall[128 * gid(0) + lid(0) + work_size * 128 * i_0];
+    if (!fall_type[i_0])
+      kf_0 = kf_fall[128 * gid(0) + lid(0) + work_size * 128 * i_0];
+    i_1 = fall_to_thd_map[i_0];
+    mod = thd_type[i_1] == 1;
+    if (thd_type[i_1] == 2)
+      mod = thd_spec[thd_offset[i_1 + 1] + -1] == 52;
+    if (thd_type[i_1] == 1 && thd_spec[thd_offset[i_1 + 1] + -1] == 52)
+      mod = thd_eff[thd_offset[i_1 + 1] + -1];
+    not_unity = thd_type[i_1] != 3;
+    i_2 = thd_map[i_1];
+    rop_net = rop_fwd[128 * gid(0) + lid(0) + work_size * 128 * i_2];
+    if (!fall_type[i_0])
+      kf_inf = kf[128 * gid(0) + lid(0) + work_size * 128 * i_2];
+    if (fall_type[i_0])
+      kf_0 = kf[128 * gid(0) + lid(0) + work_size * 128 * i_2];
+    mod = mod * P_arr[128 * gid(0) + lid(0)] * rt_inv * kf_0 / kf_inf;
+    offset_next = net_reac_to_spec_offsets[i_2 + 1];
+    offset = net_reac_to_spec_offsets[i_2];
+    i_3 = rev_mask[i_2];
+    if (i_3 >= 0)
+      rop_net = rop_net + -1.0 * rop_rev[128 * gid(0) + lid(0) + work_size * 128 * i_3];
+    absqsq = Atroe[128 * gid(0) + lid(0) + work_size * 128 * i] * Atroe[128 * gid(0) + lid(0) + work_size * 128 * i] + Btroe[128 * gid(0) + lid(0) + work_size * 128 * i] * Btroe[128 * gid(0) + lid(0) + work_size * 128 * i];
+    absqsq = absqsq * absqsq;
+    dFi = -2.0 * Atroe[128 * gid(0) + lid(0) + work_size * 128 * i] * Btroe[128 * gid(0) + lid(0) + work_size * 128 * i] * log(fmax(1e-300, Fcent[128 * gid(0) + lid(0) + work_size * 128 * i])) * (0.14 * Atroe[128 * gid(0) + lid(0) + work_size * 128 * i] + Btroe[128 * gid(0) + lid(0) + work_size * 128 * i]) * (mod + -1.0 * Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] * not_unity) / (fmax(1e-300, Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0]) * absqsq * 2.302585092994046);
+    dci_fall_dE = pres_mod[128 * gid(0) + lid(0) + work_size * 128 * i_1] * ((-1.0 * mod + Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] * not_unity) / (Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] + 1.0) + dFi);
+    if (!fall_type[i_0])
+      dci_fall_dE = dci_fall_dE + Fi[128 * gid(0) + lid(0) + work_size * 128 * i_0] * mod / (Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] + 1.0) + -1.0 * not_unity * pres_mod[128 * gid(0) + lid(0) + work_size * 128 * i_1];
+    dci_fall_dE = dci_fall_dE * rop_net;
+    for (int k_ind = offset; k_ind <= -1 + offset_next; ++k_ind)
+      if (rxn_to_spec[k_ind] != 52)
+        jac[128 * gid(0) + lid(0) + work_size * 128 * (rxn_to_spec[k_ind] + 2) + work_size * 128 * 54] = jac[128 * gid(0) + lid(0) + work_size * 128 * (rxn_to_spec[k_ind] + 2) + work_size * 128 * 54] + (reac_to_spec_nu[2 * k_ind] + -1.0 * reac_to_spec_nu[1 + 2 * k_ind]) * dci_fall_dE;
+  }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dTdotdV(__global double const *__restrict__ cp_tot, __global double const *__restrict__ cp, __global double const *__restrict__ h, __global double const *__restrict__ wdot, __global double const *__restrict__ dphi, __global double *__restrict__ jac, __global double const *__restrict__ conc, __global double const *__restrict__ phi)
+{
+  double dTsum;
+  double spec_inv;
+  double specsum;
+
+  specsum = 0.0;
+  spec_inv = 1.0 / (cp_tot[128 * gid(0) + lid(0)] * phi[128 * gid(0) + lid(0) + work_size * 128]);
+  dTsum = 0.0;
+  for (int i = 0; i <= 51; ++i)
+  {
+    dTsum = dTsum + (cp[128 * gid(0) + lid(0) + work_size * 128 * i] + -1.0 * cp[128 * gid(0) + lid(0) + work_size * 128 * 52]) * conc[128 * gid(0) + lid(0) + work_size * 128 * i];
+    specsum = specsum + (h[128 * gid(0) + lid(0) + work_size * 128 * i] + -1.0 * h[128 * gid(0) + lid(0) + work_size * 128 * 52] * mw_factor[i]) * (jac[128 * gid(0) + lid(0) + work_size * 128 * (2 + i) + work_size * 128 * 54] + -1.0 * wdot[128 * gid(0) + lid(0) + work_size * 128 * i]);
+  }
+  jac[128 * gid(0) + lid(0) + work_size * 128 * 54] = jac[128 * gid(0) + lid(0) + work_size * 128 * 54] + (dphi[128 * gid(0) + lid(0)] * dTsum + -1.0 * specsum) * spec_inv;
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dVdotdV(__global double const *__restrict__ phi, __global double const *__restrict__ P_arr, __global double const *__restrict__ dphi, __global double *__restrict__ jac)
+{
+  int i_0;
+  double sum;
+
+  sum = 0.0;
+  for (int i = 0; i <= 50; ++i)
+  {
+    i_0 = net_nonzero_spec_no_ns[i];
+    sum = sum + (1.0 + -1.0 * mw_factor[i_0]) * jac[128 * gid(0) + lid(0) + work_size * 128 * (i_0 + 2) + work_size * 128 * 54];
+  }
+  jac[128 * gid(0) + lid(0) + work_size * 128 + work_size * 128 * 54] = jac[128 * gid(0) + lid(0) + work_size * 128 + work_size * 128 * 54] + (phi[128 * gid(0) + lid(0) + work_size * 128] * jac[128 * gid(0) + lid(0) + work_size * 128 * 54] + dphi[128 * gid(0) + lid(0)]) / phi[128 * gid(0) + lid(0)];
+  jac[128 * gid(0) + lid(0) + work_size * 128 + work_size * 128 * 54] = jac[128 * gid(0) + lid(0) + work_size * 128 + work_size * 128 * 54] + 8314.4621 * phi[128 * gid(0) + lid(0)] * sum / P_arr[128 * gid(0) + lid(0)];
+}
+
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) jacobian(__global double const *__restrict__ t, __global double const *__restrict__ P_arr, __global double const *__restrict__ phi, __global double *__restrict__ jac, __global double *__restrict__ rwk)
+{
+    __global double* __restrict__ Atroe = (rwk + 0 * work_size);
+    __global double* __restrict__ Btroe = (rwk + 3328 * work_size);
+    __global double* __restrict__ Fcent = (rwk + 6656 * work_size);
+    __global double* __restrict__ Fi = (rwk + 9984 * work_size);
+    __global double* __restrict__ Kc = (rwk + 13696 * work_size);
+    __global double* __restrict__ Pr = (rwk + 53248 * work_size);
+    __global double* __restrict__ b = (rwk + 56960 * work_size);
+    __global double* __restrict__ conc = (rwk + 63744 * work_size);
+    __global double* __restrict__ cp = (rwk + 70528 * work_size);
+    __global double* __restrict__ cp_tot = (rwk + 77312 * work_size);
+    __global double* __restrict__ db = (rwk + 77440 * work_size);
+    __global double* __restrict__ dcp = (rwk + 84224 * work_size);
+    __global double* __restrict__ dphi = (rwk + 91008 * work_size);
+    __global double* __restrict__ h = (rwk + 97920 * work_size);
+    __global double* __restrict__ kf = (rwk + 104704 * work_size);
+    __global double* __restrict__ kf_fall = (rwk + 146304 * work_size);
+    __global double* __restrict__ kr = (rwk + 150016 * work_size);
+    __global double* __restrict__ pres_mod = (rwk + 189568 * work_size);
+    __global double* __restrict__ rop_fwd = (rwk + 194816 * work_size);
+    __global double* __restrict__ rop_net = (rwk + 236416 * work_size);
+    __global double* __restrict__ rop_rev = (rwk + 278016 * work_size);
+    __global double* __restrict__ thd_conc = (rwk + 317568 * work_size);
+    __global double* __restrict__ wdot = (rwk + 322816 * work_size);
+    ndot_reset(dphi);
+    
+    wdot_reset(wdot);
+    
+    get_concentrations(phi, P_arr, conc);
+    
+    a_only_simple(phi, kf);
+    
+    beta_int_simple(phi, kf);
+    
+    rateconst_fullsimple(phi, kf);
+    
+    eval_thd_body_concs(P_arr, phi, conc, thd_conc);
+    
+    rateconst_fullfall(phi, kf_fall);
+    
+    red_pres(phi, thd_conc, kf, kf_fall, Pr);
+    
+    fall_lind(Fi);
+    
+    fall_troe(Pr, phi, Fi, Fcent, Atroe, Btroe);
+    
+    eval_b(phi, b);
+    
+    rateconst_Kc(b, Kc, kf, kr);
+    
+    ci_thd(thd_conc, pres_mod);
+    
+    ci_fall(Fi, Pr, pres_mod);
+    
+    rop_eval_fwd(conc, kf, rop_fwd);
+    
+    rop_eval_rev(conc, kr, rop_rev);
+    
+    rop_net_fixed(rop_fwd, rop_rev, pres_mod, rop_net);
+    
+    spec_rates(rop_net, wdot);
+    
+    get_molar_rates(phi, dphi, wdot);
+    
+    eval_h(phi, h);
+    
+    eval_cp(phi, cp);
+    
+    temperature_rate(h, cp, conc, dphi, wdot);
+    
+    get_extra_var_rates(wdot, dphi, phi, P_arr);
+    
+    reset_arrays(jac);
+    
+    dRopidnj(pres_mod, kf, kr, conc, jac);
+    
+    dRopidnj_ns(pres_mod, kf, kr, conc, jac);
+    
+    dci_thd_dnj(rop_fwd, rop_rev, jac);
+    
+    dci_thd_dnj_ns(rop_fwd, rop_rev, jac);
+    
+    dci_lind_dnj(rop_fwd, rop_rev, Pr, pres_mod, kf, kf_fall, Fi, jac);
+    
+    dci_troe_dnj(rop_fwd, rop_rev, Pr, pres_mod, kf, kf_fall, Fi, Atroe, Btroe, Fcent, jac);
+    
+    cp_total(cp, conc, cp_tot);
+    
+    eval_dcp(phi, dcp);
+    
+    eval_db(phi, db);
+    
+    dTdot_dnj(cp, h, cp_tot, phi, dphi, jac);
+    
+    dVdot_dnj(phi, P_arr, jac);
+    
+    dRopi_dT(phi, pres_mod, rop_fwd, rop_rev, db, jac);
+    
+    dRopi_dT_ns(phi, pres_mod, kf, kr, P_arr, conc, jac);
+    
+    dci_thd_dT(rop_fwd, rop_rev, phi, P_arr, jac);
+    
+    dci_lind_dT(rop_fwd, rop_rev, phi, P_arr, pres_mod, Fi, Pr, kf, kf_fall, jac);
+    
+    dci_troe_dT(rop_fwd, rop_rev, phi, P_arr, pres_mod, Fi, Pr, kf, kf_fall, Atroe, Btroe, Fcent, jac);
+    
+    dTdot_dT(cp_tot, dphi, cp, dcp, h, conc, phi, wdot, jac);
+    
+    dVdotdT(phi, P_arr, wdot, dphi, jac);
+    
+    dRopi_dV(phi, pres_mod, rop_fwd, rop_rev, jac);
+    
+    dRopi_dV_ns(phi, pres_mod, kf, kr, P_arr, conc, jac);
+    
+    dci_thd_dE(rop_fwd, rop_rev, pres_mod, phi, P_arr, jac);
+    
+    dci_lind_dE(rop_fwd, rop_rev, pres_mod, phi, P_arr, Fi, Pr, kf, kf_fall, jac);
+    
+    dci_troe_dE(rop_fwd, rop_rev, pres_mod, phi, P_arr, Fi, Pr, kf, kf_fall, Atroe, Btroe, Fcent, jac);
+    
+    dTdotdV(cp_tot, cp, h, wdot, dphi, jac, conc, phi);
+    
+    dVdotdV(phi, P_arr, dphi, jac);
+}

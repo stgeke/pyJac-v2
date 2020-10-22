@@ -1,0 +1,56 @@
+#include "chem_utils.oclh"
+
+
+
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) eval_b(__global double const *__restrict__ phi, __global double *__restrict__ b)
+{
+  double T;
+  double Tinv;
+  double logT;
+
+  logT = log(fmin(10000.0, fmax(100.0, phi[128 * gid(0) + lid(0)])));
+  Tinv = 1.0 / fmin(10000.0, fmax(100.0, phi[128 * gid(0) + lid(0)]));
+  T = fmin(10000.0, fmax(100.0, phi[128 * gid(0) + lid(0)]));
+  for (int k = 0; k <= 52; ++k)
+  {
+    if (T < T_mid[k])
+      b[128 * gid(0) + lid(0) + work_size * 128 * k] = T * (T * (T * (T * a_lo[212 + k] / 20.0 + a_lo[159 + k] / 12.0) + a_lo[106 + k] / 6.0) + a_lo[53 + k] / 2.0) + (a_lo[k] + -1.0) * logT + -1.0 * a_lo[k] + a_lo[318 + k] + -1.0 * a_lo[265 + k] * Tinv;
+    if (!(T < T_mid[k]))
+      b[128 * gid(0) + lid(0) + work_size * 128 * k] = T * (T * (T * (T * a_hi[212 + k] / 20.0 + a_hi[159 + k] / 12.0) + a_hi[106 + k] / 6.0) + a_hi[53 + k] / 2.0) + (a_hi[k] + -1.0) * logT + -1.0 * a_hi[k] + a_hi[318 + k] + -1.0 * a_hi[265 + k] * Tinv;
+  }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) eval_h(__global double const *__restrict__ phi, __global double *__restrict__ h)
+{
+  double T;
+
+  T = fmin(10000.0, fmax(100.0, phi[128 * gid(0) + lid(0)]));
+  for (int k = 0; k <= 52; ++k)
+  {
+    if (T < T_mid[k])
+      h[128 * gid(0) + lid(0) + work_size * 128 * k] = 8314.4621 * (T * (T * (T * (T * (T * a_lo[212 + k] / 5.0 + a_lo[159 + k] / 4.0) + a_lo[106 + k] / 3.0) + a_lo[53 + k] / 2.0) + a_lo[k]) + a_lo[265 + k]);
+    if (!(T < T_mid[k]))
+      h[128 * gid(0) + lid(0) + work_size * 128 * k] = 8314.4621 * (T * (T * (T * (T * (T * a_hi[212 + k] / 5.0 + a_hi[159 + k] / 4.0) + a_hi[106 + k] / 3.0) + a_hi[53 + k] / 2.0) + a_hi[k]) + a_hi[265 + k]);
+  }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) eval_cp(__global double const *__restrict__ phi, __global double *__restrict__ cp)
+{
+  double T;
+
+  T = fmin(10000.0, fmax(100.0, phi[128 * gid(0) + lid(0)]));
+  for (int k = 0; k <= 52; ++k)
+  {
+    if (T < T_mid[k])
+      cp[128 * gid(0) + lid(0) + work_size * 128 * k] = 8314.4621 * (T * (T * (T * (T * a_lo[212 + k] + a_lo[159 + k]) + a_lo[106 + k]) + a_lo[53 + k]) + a_lo[k]);
+    if (!(T < T_mid[k]))
+      cp[128 * gid(0) + lid(0) + work_size * 128 * k] = 8314.4621 * (T * (T * (T * (T * a_hi[212 + k] + a_hi[159 + k]) + a_hi[106 + k]) + a_hi[53 + k]) + a_hi[k]);
+  }
+}
+
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) chem_utils(__global double const *__restrict__ t, __global double *__restrict__ b, __global double const *__restrict__ phi, __global double *__restrict__ h, __global double *__restrict__ cp, __global double *__restrict__ rwk)
+{
+    eval_b(phi, b);
+    
+    eval_h(phi, h);
+    
+    eval_cp(phi, cp);
+}

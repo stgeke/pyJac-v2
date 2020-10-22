@@ -1,0 +1,6 @@
+#ifndef VECTORIZATION_OCLH
+#define VECTORIZATION_OCLH
+#include "mechanism.oclh"
+#define WIDE
+#define VECWIDTH (128)
+#endif

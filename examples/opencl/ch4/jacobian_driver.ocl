@@ -1,0 +1,55 @@
+#include "jacobian_driver.oclh"
+
+
+
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) copy_in(__global double const *__restrict__ P_arr, __global double const *__restrict__ phi, __global double *__restrict__ P_arr_local, __global double *__restrict__ phi_local, int const problem_size, int const driver_offset)
+{
+  if (driver_offset + lid(0) + gid(0) * 128 < problem_size)
+    for (int i = 0; i <= 53; ++i)
+    {
+      phi_local[128 * gid(0) + lid(0) + work_size * 128 * i] = phi[driver_offset + lid(0) + gid(0) * 128 + problem_size * i];
+      P_arr_local[128 * gid(0) + lid(0)] = P_arr[driver_offset + lid(0) + gid(0) * 128];
+    }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) driver(int const problem_size, __global double const *__restrict__ t, __global double const *__restrict__ P_arr_local, __global double const *__restrict__ phi_local, __global double *__restrict__ jac_local, __global double *__restrict__ rwk)
+{
+  {
+    int const i = 0;
+
+    jacobian(t, P_arr_local, phi_local, jac_local, rwk);
+  }
+}
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) copy_out(__global double *__restrict__ jac, __global double const *__restrict__ jac_local, int const problem_size, int const driver_offset)
+{
+  if (driver_offset + lid(0) + gid(0) * 128 < problem_size)
+    for (int i = 0; i <= 53; ++i)
+      for (int i_0 = 0; i_0 <= 53; ++i_0)
+        jac[driver_offset + lid(0) + gid(0) * 128 + problem_size * i + problem_size * 54 * i_0] = jac_local[128 * gid(0) + lid(0) + work_size * 128 * i + work_size * 128 * 54 * i_0];
+}
+
+__kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) jacobian_driver(int const problem_size, __global double const *__restrict__ P_arr, __global double const *__restrict__ phi, __global double *__restrict__ jac, __global double *__restrict__ rwk)
+{
+    
+    #if defined(WIDE) && !defined(EXPLICIT_SIMD)
+        // each group processes get_global_size(0) condtions
+        #define inc (get_global_size(0))
+    #elif defined(WIDE) && defined(EXPLICIT_SIMD)
+        // each group processes VECWIDTH condtions
+        #define inc (VECWIDTH * get_global_size(0))
+    #else
+        // each group processes a single condtion
+        #define inc (get_num_groups(0))
+    #endif
+    __global double* __restrict__ P_arr_local = (rwk + 329600 * work_size);
+    __global double* __restrict__ phi_local = (rwk + 329728 * work_size);
+    __global double* __restrict__ jac_local = (rwk + 336640 * work_size);
+    __global double* __restrict__ t = 0;
+    for (int driver_offset = 0; driver_offset < problem_size; driver_offset += inc)
+    {
+        copy_in(P_arr, phi, P_arr_local, phi_local, problem_size, driver_offset);
+    
+        driver(problem_size, t, P_arr_local, phi_local, jac_local, rwk);
+    
+        copy_out(jac, jac_local, problem_size, driver_offset);
+    }
+}
