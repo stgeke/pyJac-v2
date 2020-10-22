@@ -283,8 +283,8 @@ void JacobianKernel::mem_init(size_t problem_size, size_t work_size)
             double zero = 0;
         #else
             // otherwise, we need a zero buffer to use clEnqueueWriteBuffer
-            double* zero = (double*)malloc((2916 * problem_size > 709888 * work_size ? 2916 * problem_size : 709888 * work_size) * sizeof(double));
-            memset(zero, 0, (2916 * problem_size > 709888 * work_size ? 2916 * problem_size : 709888 * work_size) * sizeof(double));
+            double* zero = (double*)malloc((1984 * problem_size > 590592 * work_size ? 1984 * problem_size : 590592 * work_size) * sizeof(double));
+            memset(zero, 0, (1984 * problem_size > 590592 * work_size ? 1984 * problem_size : 590592 * work_size) * sizeof(double));
         #endif
     #endif
 
@@ -301,10 +301,10 @@ void JacobianKernel::mem_init(size_t problem_size, size_t work_size)
     this->d_phi = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, 54 * per_run * sizeof(double), NULL, &return_code);
     check_err(return_code);
 
-    this->d_jac = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, 2916 * per_run * sizeof(double), NULL, &return_code);
+    this->d_jac = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, 1984 * per_run * sizeof(double), NULL, &return_code);
     check_err(return_code);
 
-    this->d_rwk = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, work_size*709888 * sizeof(double), NULL, &return_code);
+    this->d_rwk = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, work_size*590592 * sizeof(double), NULL, &return_code);
     check_err(return_code);
 
     /* and memset to zero */
@@ -326,18 +326,18 @@ void JacobianKernel::mem_init(size_t problem_size, size_t work_size)
     check_err(clEnqueueUnmapMemObject(queue, this->d_phi, h_temp_d, 0, NULL, NULL));
 
     // map to host address space for initialization
-    h_temp_d = (double*)clEnqueueMapBuffer(queue, this->d_jac, CL_TRUE, CL_MAP_WRITE, 0, 2916 * per_run * sizeof(double), 0, NULL, NULL, &return_code);
+    h_temp_d = (double*)clEnqueueMapBuffer(queue, this->d_jac, CL_TRUE, CL_MAP_WRITE, 0, 1984 * per_run * sizeof(double), 0, NULL, NULL, &return_code);
     check_err(return_code);
     // set memory
-    memset(h_temp_d, 0, 2916 * per_run * sizeof(double));
+    memset(h_temp_d, 0, 1984 * per_run * sizeof(double));
     // and unmap back to device
     check_err(clEnqueueUnmapMemObject(queue, this->d_jac, h_temp_d, 0, NULL, NULL));
 
     // map to host address space for initialization
-    h_temp_d = (double*)clEnqueueMapBuffer(queue, this->d_rwk, CL_TRUE, CL_MAP_WRITE, 0, work_size*709888 * sizeof(double), 0, NULL, NULL, &return_code);
+    h_temp_d = (double*)clEnqueueMapBuffer(queue, this->d_rwk, CL_TRUE, CL_MAP_WRITE, 0, work_size*590592 * sizeof(double), 0, NULL, NULL, &return_code);
     check_err(return_code);
     // set memory
-    memset(h_temp_d, 0, work_size*709888 * sizeof(double));
+    memset(h_temp_d, 0, work_size*590592 * sizeof(double));
     // and unmap back to device
     check_err(clEnqueueUnmapMemObject(queue, this->d_rwk, h_temp_d, 0, NULL, NULL));
 
@@ -376,7 +376,7 @@ void JacobianKernel::finalize_memory()
 
 const std::size_t JacobianKernel::requiredMemorySize() const
 {
-    return work_size*709888 * sizeof(double);
+    return work_size*590592 * sizeof(double);
 }
 
 /*
@@ -487,12 +487,12 @@ void JacobianKernel::operator()(double* h_P_arr, double* h_phi, double* h_jac)
 
         // Memory Transfers out
         // map to host address space for initialization
-        h_temp_d = (double*)clEnqueueMapBuffer(queue, this->d_jac, CL_TRUE, CL_MAP_READ, 0, 2916 * per_run * sizeof(double), 0, NULL, NULL, &return_code);
+        h_temp_d = (double*)clEnqueueMapBuffer(queue, this->d_jac, CL_TRUE, CL_MAP_READ, 0, 1984 * per_run * sizeof(double), 0, NULL, NULL, &return_code);
         check_err(return_code);
         // set memory
         {
             const size_t host_origin[3] = {offset * sizeof(double), 0, 0};
-            const size_t region[3] = {this_run * sizeof(double), 2916, 1};
+            const size_t region[3] = {this_run * sizeof(double), 1984, 1};
             memcpy2D_out(h_jac, h_temp_d, &host_origin[0], &region[0], per_run * sizeof(double), 0, problem_size * sizeof(double), 0);
         }
 
@@ -528,7 +528,7 @@ int main(int argc, char* argv[])
     cassert(h_P_arr_local != NULL, "malloc failed");
     h_phi_local = (double*)malloc(54 * problem_size * sizeof(double));
     cassert(h_phi_local != NULL, "malloc failed");
-    h_jac_local = (double*)malloc(2916 * problem_size * sizeof(double));
+    h_jac_local = (double*)malloc(1984 * problem_size * sizeof(double));
     cassert(h_jac_local != NULL, "malloc failed");
 
     //read input data
