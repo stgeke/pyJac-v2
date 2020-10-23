@@ -18,14 +18,6 @@ The full documentation for pyJac can be found at <http://slackha.github.io/pyJac
 Further support can be found at our [user group](https://groups.io/g/slackha-users),
 or by [opening an issue](https://github.com/SLACKHA/pyJac/issues) on our github repo.
 
-## Installation
-
-```
-> pip install --upgrade --user -r requirements.txt
-> python ./setup.py build
-> python ./setup.py install --user
-```
-
 ## OpenCL Example
 
 ```
@@ -35,10 +27,19 @@ or by [opening an issue](https://github.com/SLACKHA/pyJac/issues) on our github 
 > ./jac 1000000 128
 ```
 
-The source code of this example was generated using 
+Note, running this example doesn't require any installation. The source code was generated using 
 ```
 > ~/.local/bin/pyjac --lang opencl --width 128 --data_order F --platform NVIDIA --input data/h2o2.inp --jac_format full
 ```
+
+## Installation
+
+```
+> pip install --upgrade --user -r requirements.txt
+> python ./setup.py build
+> python ./setup.py install --user
+```
+
 ## Theory
 
 Theory, derivations, validation and performance testing can be found in the paper
