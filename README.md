@@ -31,7 +31,7 @@ or by [opening an issue](https://github.com/SLACKHA/pyJac/issues) on our github 
 ```
 > cd examples/opencl/h2o2
 > make
-> ./genic 1000000 
+> ./genic 1000000 >data.bin
 > ./jac 1000000 128
 ```
 
