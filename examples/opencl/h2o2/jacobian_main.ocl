@@ -64,7 +64,7 @@ size_t Kernel::this_run(size_t offset)
     return this->problem_size - offset < per_run ? this->problem_size - offset : per_run;
 }
 
-const char* Kernel::build_options = "-I/home/stefanke/pyJac-v2/out -cl-std=CL1.2";
+const char* Kernel::build_options = "-cl-std=CL1.2";
 const char* Kernel::platform_check = "NVIDIA";
 const unsigned int Kernel::device_type = CL_DEVICE_TYPE_ALL;
 
@@ -391,7 +391,7 @@ JacobianKernel::JacobianKernel()
 {
     this->max_per_run = 9223372036854775808;
     this->num_source = 5;
-    this->kernel_path = "/home/stefanke/pyJac-v2/out/jacobian.bin";
+    this->kernel_path = "jacobian.bin";
 
 }
 
@@ -418,7 +418,7 @@ JacobianKernel::JacobianKernel(size_t problem_size, size_t work_size, bool do_no
     this->max_per_run = 9223372036854775808;
     this->compiled = do_not_compile;
     this->num_source = 5;
-    this->kernel_path = "/home/stefanke/pyJac-v2/out/jacobian.bin";
+    this->kernel_path = "jacobian.bin";
 this->init(problem_size, work_size);
 }
 

@@ -4,7 +4,7 @@
 
 __kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) reset_arrays(__global double *__restrict__ jac)
 {
-  for (int i = 0; i <= 1983; ++i)
+  for (int i = 0; i <= 1418; ++i)
     jac[128 * gid(0) + lid(0) + work_size * 128 * i] = 0.0;
 }
 __kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dRopidnj(__global double const *__restrict__ pres_mod, __global double const *__restrict__ kf, __global double const *__restrict__ kr, __global double const *__restrict__ conc, __global double *__restrict__ jac)
@@ -44,7 +44,7 @@ __kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dRopidnj(__globa
     if (thd_mask[i] >= 0)
       ci = pres_mod[128 * gid(0) + lid(0) + work_size * 128 * i_1];
     for (int net_ind_k = net_offset; net_ind_k <= -1 + net_offset_next; ++net_ind_k)
-      if (-1 + -1 * inner_offset + inner_offset_next >= 0)
+      if (-1 + inner_offset_next + -1 * inner_offset >= 0)
       {
         spec_k = rxn_to_spec[net_ind_k];
         if (spec_k != 52)
@@ -114,7 +114,7 @@ __kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dRopidnj_ns(__gl
     if (thd_mask[i_0] >= 0)
       ci = pres_mod[128 * gid(0) + lid(0) + work_size * 128 * thd_mask[i_0]];
     for (int net_ind_k = net_offset; net_ind_k <= -1 + net_offset_next; ++net_ind_k)
-      if (-1 + -1 * inner_offset + inner_offset_next >= 0)
+      if (-1 + inner_offset_next + -1 * inner_offset >= 0)
       {
         spec_k = rxn_to_spec[net_ind_k];
         if (spec_k != 52)
@@ -180,7 +180,7 @@ __kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dci_thd_dnj(__gl
     if (rev_mask[i_1] >= 0)
       ropi = ropi + -1.0 * rop_rev[128 * gid(0) + lid(0) + work_size * 128 * i_2];
     for (int spec_j_ind = thd_off; spec_j_ind <= -1 + thd_off_next; ++spec_j_ind)
-      if (-1 + rxn_off_next + -1 * rxn_off >= 0)
+      if (-1 + -1 * rxn_off + rxn_off_next >= 0)
       {
         spec_j = thd_spec[spec_j_ind];
         if (spec_j != 52)
@@ -294,7 +294,7 @@ __kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dci_lind_dnj(__g
       Fi_fac = Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] * Fi_fac + 1.0;
     dFi = k0 * (Fi[128 * gid(0) + lid(0) + work_size * 128 * i_0] * Fi_fac + -1.0 * pres_mod[128 * gid(0) + lid(0) + work_size * 128 * i_1]) / (kinf * (Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] + 1.0));
     for (int spec_j_ind = thd_off; spec_j_ind <= -1 + thd_off_next; ++spec_j_ind)
-      if (-1 + rxn_off_next + -1 * rxn_off >= 0)
+      if (-1 + -1 * rxn_off + rxn_off_next >= 0)
       {
         spec_j = thd_spec[spec_j_ind];
         if (spec_j != 52)
@@ -366,7 +366,7 @@ __kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dci_troe_dnj(__g
       Fi_fac = Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] * Fi_fac + 1.0;
     dFi = k0 * (Fi[128 * gid(0) + lid(0) + work_size * 128 * i_0] * Fi_fac + -1.0 * pres_mod[128 * gid(0) + lid(0) + work_size * 128 * i_2]) / (kinf * (Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] + 1.0));
     for (int spec_j_ind = thd_off; spec_j_ind <= -1 + thd_off_next; ++spec_j_ind)
-      if (-1 + rxn_off_next + -1 * rxn_off >= 0)
+      if (-1 + -1 * rxn_off + rxn_off_next >= 0)
       {
         spec_j = thd_spec[spec_j_ind];
         if (spec_j != 52)
@@ -485,20 +485,20 @@ __kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dRopi_dT(__globa
   {
     offset_next = net_reac_to_spec_offsets[1 + i];
     offset = net_reac_to_spec_offsets[i];
-    i_1 = thd_mask[i];
-    i_0 = rev_mask[i];
+    i_1 = rev_mask[i];
+    i_0 = thd_mask[i];
     dkf = (simple_beta[i] + simple_Ta[i] * Tinv) * Tinv;
     dRopidT = rop_fwd[128 * gid(0) + lid(0) + work_size * 128 * i] * dkf;
     if (rev_mask[i] >= 0)
       dBk_sum = 0.0;
     ci = 1.0;
     if (thd_mask[i] >= 0)
-      ci = pres_mod[128 * gid(0) + lid(0) + work_size * 128 * i_1];
+      ci = pres_mod[128 * gid(0) + lid(0) + work_size * 128 * i_0];
     if (rev_mask[i] >= 0)
     {
       for (int net_ind = offset; net_ind <= -1 + offset_next; ++net_ind)
         dBk_sum = dBk_sum + (reac_to_spec_nu[2 * net_ind] + -1.0 * reac_to_spec_nu[1 + 2 * net_ind]) * db[128 * gid(0) + lid(0) + work_size * 128 * rxn_to_spec[net_ind]];
-      dRopidT = dRopidT + -1.0 * rop_rev[128 * gid(0) + lid(0) + work_size * 128 * i_0] * (dkf + -1.0 * dBk_sum);
+      dRopidT = dRopidT + -1.0 * rop_rev[128 * gid(0) + lid(0) + work_size * 128 * i_1] * (dkf + -1.0 * dBk_sum);
     }
     dRopidT = dRopidT * ci * phi[128 * gid(0) + lid(0) + work_size * 128];
     for (int k_ind = offset; k_ind <= -1 + offset_next; ++k_ind)
@@ -747,30 +747,30 @@ __kernel void __attribute__ ((reqd_work_group_size(128, 1, 1))) dci_troe_dT(__gl
       kf_0 = kf[128 * gid(0) + lid(0) + work_size * 128 * i_2];
     offset_next = net_reac_to_spec_offsets[i_2 + 1];
     offset = net_reac_to_spec_offsets[i_2];
-    i_4 = rev_mask[i_2];
-    if (i_4 >= 0)
-      rop_net = rop_net + -1.0 * rop_rev[128 * gid(0) + lid(0) + work_size * 128 * i_4];
+    i_4 = simple_mask[i_2];
+    i_3 = rev_mask[i_2];
+    if (i_3 >= 0)
+      rop_net = rop_net + -1.0 * rop_rev[128 * gid(0) + lid(0) + work_size * 128 * i_3];
     dci_thd_dT_fac = -1.0 * P_arr[128 * gid(0) + lid(0)] * mod * 0.00012027236253804078 * Tinv * Tinv;
     theta_no_Pr = dci_thd_dT_fac * kf_0 / kf_inf;
-    i_3 = simple_mask[i_2];
     if (!fall_type[i_0])
-      beta_inf = simple_beta[i_3];
+      beta_inf = simple_beta[i_4];
     if (fall_type[i_0])
       beta_inf = fall_beta[i_0];
     if (!fall_type[i_0])
       beta_0 = fall_beta[i_0];
     if (fall_type[i_0])
-      beta_0 = simple_beta[i_3];
+      beta_0 = simple_beta[i_4];
     absq = Atroe[128 * gid(0) + lid(0) + work_size * 128 * i] * Atroe[128 * gid(0) + lid(0) + work_size * 128 * i] + Btroe[128 * gid(0) + lid(0) + work_size * 128 * i] * Btroe[128 * gid(0) + lid(0) + work_size * 128 * i];
     absqsq = absq * absq;
     if (!fall_type[i_0])
-      Ta_inf = simple_Ta[i_3];
+      Ta_inf = simple_Ta[i_4];
     if (fall_type[i_0])
       Ta_inf = fall_Ta[i_0];
     if (!fall_type[i_0])
       Ta_0 = fall_Ta[i_0];
     if (fall_type[i_0])
-      Ta_0 = simple_Ta[i_3];
+      Ta_0 = simple_Ta[i_4];
     theta_Pr = Tinv * (beta_0 + -1.0 * beta_inf + (Ta_0 + -1.0 * Ta_inf) * Tinv);
     dFi = -1.0 * Btroe[128 * gid(0) + lid(0) + work_size * 128 * i] * (2.0 * Atroe[128 * gid(0) + lid(0) + work_size * 128 * i] * Fcent[128 * gid(0) + lid(0) + work_size * 128 * i] * (0.14 * Atroe[128 * gid(0) + lid(0) + work_size * 128 * i] + Btroe[128 * gid(0) + lid(0) + work_size * 128 * i]) * (Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] * theta_Pr + theta_no_Pr) * logFcent + Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] * dFcent * (2.0 * Atroe[128 * gid(0) + lid(0) + work_size * 128 * i] * (1.1762 * Atroe[128 * gid(0) + lid(0) + work_size * 128 * i] + -1.0 * 0.67 * Btroe[128 * gid(0) + lid(0) + work_size * 128 * i]) * logFcent + -1.0 * Btroe[128 * gid(0) + lid(0) + work_size * 128 * i] * absq * 2.302585092994046)) / (Fcent[128 * gid(0) + lid(0) + work_size * 128 * i] * fmax(1e-300, Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0]) * absqsq * 2.302585092994046);
     dci_fall_dT = pmod * (-1.0 * (Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] * theta_Pr + theta_no_Pr) / (Pr[128 * gid(0) + lid(0) + work_size * 128 * i_0] + 1.0) + dFi);

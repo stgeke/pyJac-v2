@@ -64,7 +64,7 @@ size_t Kernel::this_run(size_t offset)
     return this->problem_size - offset < per_run ? this->problem_size - offset : per_run;
 }
 
-const char* Kernel::build_options = "-I/home/stefanke/pyJac-v2/out -cl-std=CL1.2";
+const char* Kernel::build_options = "-cl-std=CL1.2";
 const char* Kernel::platform_check = "NVIDIA";
 const unsigned int Kernel::device_type = CL_DEVICE_TYPE_ALL;
 
@@ -283,8 +283,8 @@ void JacobianKernel::mem_init(size_t problem_size, size_t work_size)
             double zero = 0;
         #else
             // otherwise, we need a zero buffer to use clEnqueueWriteBuffer
-            double* zero = (double*)malloc((1984 * problem_size > 590592 * work_size ? 1984 * problem_size : 590592 * work_size) * sizeof(double));
-            memset(zero, 0, (1984 * problem_size > 590592 * work_size ? 1984 * problem_size : 590592 * work_size) * sizeof(double));
+            double* zero = (double*)malloc((1419 * problem_size > 518272 * work_size ? 1419 * problem_size : 518272 * work_size) * sizeof(double));
+            memset(zero, 0, (1419 * problem_size > 518272 * work_size ? 1419 * problem_size : 518272 * work_size) * sizeof(double));
         #endif
     #endif
 
@@ -301,10 +301,10 @@ void JacobianKernel::mem_init(size_t problem_size, size_t work_size)
     this->d_phi = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, 54 * per_run * sizeof(double), NULL, &return_code);
     check_err(return_code);
 
-    this->d_jac = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, 1984 * per_run * sizeof(double), NULL, &return_code);
+    this->d_jac = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, 1419 * per_run * sizeof(double), NULL, &return_code);
     check_err(return_code);
 
-    this->d_rwk = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, work_size*590592 * sizeof(double), NULL, &return_code);
+    this->d_rwk = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_ALLOC_HOST_PTR, work_size*518272 * sizeof(double), NULL, &return_code);
     check_err(return_code);
 
     /* and memset to zero */
@@ -326,18 +326,18 @@ void JacobianKernel::mem_init(size_t problem_size, size_t work_size)
     check_err(clEnqueueUnmapMemObject(queue, this->d_phi, h_temp_d, 0, NULL, NULL));
 
     // map to host address space for initialization
-    h_temp_d = (double*)clEnqueueMapBuffer(queue, this->d_jac, CL_TRUE, CL_MAP_WRITE, 0, 1984 * per_run * sizeof(double), 0, NULL, NULL, &return_code);
+    h_temp_d = (double*)clEnqueueMapBuffer(queue, this->d_jac, CL_TRUE, CL_MAP_WRITE, 0, 1419 * per_run * sizeof(double), 0, NULL, NULL, &return_code);
     check_err(return_code);
     // set memory
-    memset(h_temp_d, 0, 1984 * per_run * sizeof(double));
+    memset(h_temp_d, 0, 1419 * per_run * sizeof(double));
     // and unmap back to device
     check_err(clEnqueueUnmapMemObject(queue, this->d_jac, h_temp_d, 0, NULL, NULL));
 
     // map to host address space for initialization
-    h_temp_d = (double*)clEnqueueMapBuffer(queue, this->d_rwk, CL_TRUE, CL_MAP_WRITE, 0, work_size*590592 * sizeof(double), 0, NULL, NULL, &return_code);
+    h_temp_d = (double*)clEnqueueMapBuffer(queue, this->d_rwk, CL_TRUE, CL_MAP_WRITE, 0, work_size*518272 * sizeof(double), 0, NULL, NULL, &return_code);
     check_err(return_code);
     // set memory
-    memset(h_temp_d, 0, work_size*590592 * sizeof(double));
+    memset(h_temp_d, 0, work_size*518272 * sizeof(double));
     // and unmap back to device
     check_err(clEnqueueUnmapMemObject(queue, this->d_rwk, h_temp_d, 0, NULL, NULL));
 
@@ -376,7 +376,7 @@ void JacobianKernel::finalize_memory()
 
 const std::size_t JacobianKernel::requiredMemorySize() const
 {
-    return work_size*590592 * sizeof(double);
+    return work_size*518272 * sizeof(double);
 }
 
 /*
@@ -391,7 +391,7 @@ JacobianKernel::JacobianKernel()
 {
     this->max_per_run = 9223372036854775808;
     this->num_source = 5;
-    this->kernel_path = "/home/stefanke/pyJac-v2/out/jacobian.bin";
+    this->kernel_path = "jacobian.bin";
 
 }
 
@@ -418,7 +418,7 @@ JacobianKernel::JacobianKernel(size_t problem_size, size_t work_size, bool do_no
     this->max_per_run = 9223372036854775808;
     this->compiled = do_not_compile;
     this->num_source = 5;
-    this->kernel_path = "/home/stefanke/pyJac-v2/out/jacobian.bin";
+    this->kernel_path = "jacobian.bin";
 this->init(problem_size, work_size);
 }
 
@@ -487,12 +487,12 @@ void JacobianKernel::operator()(double* h_P_arr, double* h_phi, double* h_jac)
 
         // Memory Transfers out
         // map to host address space for initialization
-        h_temp_d = (double*)clEnqueueMapBuffer(queue, this->d_jac, CL_TRUE, CL_MAP_READ, 0, 1984 * per_run * sizeof(double), 0, NULL, NULL, &return_code);
+        h_temp_d = (double*)clEnqueueMapBuffer(queue, this->d_jac, CL_TRUE, CL_MAP_READ, 0, 1419 * per_run * sizeof(double), 0, NULL, NULL, &return_code);
         check_err(return_code);
         // set memory
         {
             const size_t host_origin[3] = {offset * sizeof(double), 0, 0};
-            const size_t region[3] = {this_run * sizeof(double), 1984, 1};
+            const size_t region[3] = {this_run * sizeof(double), 1419, 1};
             memcpy2D_out(h_jac, h_temp_d, &host_origin[0], &region[0], per_run * sizeof(double), 0, problem_size * sizeof(double), 0);
         }
 
@@ -528,7 +528,7 @@ int main(int argc, char* argv[])
     cassert(h_P_arr_local != NULL, "malloc failed");
     h_phi_local = (double*)malloc(54 * problem_size * sizeof(double));
     cassert(h_phi_local != NULL, "malloc failed");
-    h_jac_local = (double*)malloc(1984 * problem_size * sizeof(double));
+    h_jac_local = (double*)malloc(1419 * problem_size * sizeof(double));
     cassert(h_jac_local != NULL, "malloc failed");
 
     //read input data
@@ -546,13 +546,12 @@ int main(int argc, char* argv[])
     StartTimer();
     kernel.resize(problem_size, work_size, !compile);
     double setup_time = GetTimer();
-    kernel(h_P_arr_local, h_phi_local, h_jac_local);
     StartTimer();
     kernel(h_P_arr_local, h_phi_local, h_jac_local);
     double runtime = GetTimer();
 
-    printf("%zu,%.15le,%.15le,%.15le,%.15le\n", problem_size, compilation_time,
-                setup_time, runtime, (double) problem_size/(runtime/1e3));
+    printf("%zu,%.15le,%.15le,%.15le\n", problem_size, compilation_time,
+                setup_time, runtime);
 
     // write output to file if supplied
 
